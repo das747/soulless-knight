@@ -83,7 +83,7 @@ class Hero(pygame.sprite.Sprite):
     def get_pos(self):
         return self.rect.x + self.rect.w // 2, self.rect.y + self.rect.h // 2
 
-   def move(self):
+    def move(self):
         speed = 5
         keys = pygame.key.get_pressed()
         x, y = 0, 0
