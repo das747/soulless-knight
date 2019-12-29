@@ -26,13 +26,12 @@ class Camera:
 
 camera = Camera()
 
-
 tile_width = tile_height = 40
 
 size = width, height = 600, 600
 screen = pygame.display.set_mode(size)
-running = True
 all_sprites = pygame.sprite.Group()
+
 
 def load_level(filename):
     filename = "data/levels/" + filename
@@ -77,13 +76,11 @@ class Knight(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites)
         self.image = Knight.knight
-        self.rect = self.image.get_rect()
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
     def update(self, *args):
-        args = args[0]
         speed = 5
         keys = pygame.key.get_pressed()
         x, y = 0, 0
@@ -97,16 +94,15 @@ class Knight(pygame.sprite.Sprite):
             self.image = self.knight
         while pygame.sprite.spritecollideany(self, borders):
             self.rect = self.rect.move(-x, 0)
+
         if keys[pygame.K_UP]:
             self.rect = self.rect.move(0, -speed)
             y = -speed
         elif keys[pygame.K_DOWN]:
             self.rect = self.rect.move(0, speed)
             y = speed
-
         while pygame.sprite.spritecollideany(self, borders):
             self.rect = self.rect.move(0, -y)
-        # all_sprites.draw(screen)
 
 
 borders = pygame.sprite.Group()
@@ -117,11 +113,9 @@ class Border(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.add(borders)
         self.image = load_image("Wall.jpg", -1)
-        self.rect = self.image.get_rect()
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
-
 
 
 def terminate():
@@ -148,7 +142,6 @@ while True:
         camera.apply(sprite)
     screen.fill((255, 255, 255))
     all_sprites.draw(screen)
-    all_sprites.update(event)
-
+    all_sprites.update()
     pygame.display.flip()
     clock.tick(60)
