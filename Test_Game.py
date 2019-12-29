@@ -70,29 +70,33 @@ def generate_level(level):
     return new_player
 
 
-class Knight(pygame.sprite.Sprite):
-    knight = load_image("Knight2.png", -1)
+class Hero(pygame.sprite.Sprite):
+    images = {'knight': load_image("Knight2.png", -1)}
 
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites)
-        self.image = Knight.knight
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
+        self.direction = False
 
-    def update(self, *args):
+    def get_pos(self):
+        return self.rect.x + self.rect.w // 2, self.rect.y + self.rect.h // 2
+
+    def move(self):
         speed = 5
         keys = pygame.key.get_pressed()
         x, y = 0, 0
+        new_dir = self.direction
         if keys[pygame.K_LEFT]:
             self.rect = self.rect.move(-speed, 0)
             x = -speed
-            self.image = pygame.transform.flip(self.knight, 1, 0)
+            new_dir = True
         elif keys[pygame.K_RIGHT]:
             self.rect = self.rect.move(speed, 0)
             x = speed
-            self.image = self.knight
-        while pygame.sprite.spritecollideany(self, borders):
+            new_dir = False
+        if any([pygame.sprite.collide_mask(self, border) for border in borders]):
             self.rect = self.rect.move(-x, 0)
 
         if keys[pygame.K_UP]:
@@ -101,8 +105,20 @@ class Knight(pygame.sprite.Sprite):
         elif keys[pygame.K_DOWN]:
             self.rect = self.rect.move(0, speed)
             y = speed
-        while pygame.sprite.spritecollideany(self, borders):
+        while any([pygame.sprite.collide_mask(self, border) for border in borders]):
             self.rect = self.rect.move(0, -y)
+        return new_dir
+
+    def update(self, *args):
+        new_dir = self.move()
+        self.image = pygame.transform.flip(self.image, self.direction != new_dir, 0)
+        self.direction = new_dir
+
+
+class Knight(Hero):
+    def __init__(self, pos_x, pos_y):
+        self.image = Hero.images['knight']
+        super().__init__(pos_x, pos_y)
 
 
 borders = pygame.sprite.Group()
