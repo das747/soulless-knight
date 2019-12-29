@@ -70,6 +70,46 @@ def generate_level(level):
     return new_player
 
 
+class AnimatedSprite(pygame.sprite.Sprite):
+    def __init__(self, sheet, columns, rows, x, y):
+        super().__init__(all_sprites)
+        self.frames = []
+        self.cut_sheet(sheet, columns, rows)
+        self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
+        self.rect = self.rect.move(x, y)
+
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                        frame_location, self.rect.size)))
+
+
+class AbstractItem(AnimatedSprite):
+    def __init__(self, image, x, y):
+        super().__init__(image, 2, 1, x, y)
+
+    def update(self):
+        if pygame.sprite.collide_mask(self, hero):
+            self.image = self.frames[1]
+        else:
+            self.image = self.frames[0]
+
+
+class Potion(AbstractItem):
+    types = {'small_heal': (load_image('potion1.png', -1), 2, 0, 0, 0)}
+
+    def __init__(self, x, y, potion_type):
+        self.stats = Potion.types[potion_type]
+        super().__init__(self.stats[0], x, y)
+
+
+
+
 class Knight(pygame.sprite.Sprite):
     knight = load_image("Knight2.png", -1)
 
@@ -129,18 +169,18 @@ level = load_level('level_1.txt')
 for i in level:
     print(*i)
 
-knight = generate_level(level)
+hero = generate_level(level)
+Potion(150, 150)
 
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             terminate()
-
-    camera.update(knight)
+    camera.update(hero)
     # обновляем положение всех спрайтов
     for sprite in all_sprites:
         camera.apply(sprite)
-    screen.fill((255, 255, 255))
+    screen.fill((0, 0, 0))
     all_sprites.draw(screen)
     all_sprites.update()
     pygame.display.flip()
