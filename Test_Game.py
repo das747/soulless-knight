@@ -89,7 +89,8 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
 
 class Potion(AnimatedSprite):  # любое зелье
     # каждое зелье бафает определённые статы
-    types = {'red': (2, 0, 0, 0)}
+    types = {'red': (2, 0, 0, 0), 'blue': (0, 80, 0, 0), 'green': (0, 0, 0, 5),
+             'yellow': (0, 0, 5, 0)}
 
     def __init__(self, potion_type, x, y, size='small'):
         self.health, self.mana, self.dmg, self.speed = [i * (1 + (size == 'big')) for i in
@@ -107,7 +108,7 @@ class Potion(AnimatedSprite):  # любое зелье
 
 class Hero(AnimatedSprite):
     # классы определяются статами
-    types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizzard': (4, 150, 7, 7)}
+    types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
 
     def __init__(self, hero_type, sex, pos_x, pos_y):
         self.heath, self.mana, self.dmg, self.speed = Hero.types[hero_type]
@@ -184,9 +185,16 @@ level = load_level('level_1.txt')
 for i in level:
     print(*i)
 
-hero = generate_level(level, 'wizzard', 'f')
+hero = generate_level(level, 'lizard', 'f')
 player = pygame.sprite.Group(hero)
 Potion('red', 150, 150)
+Potion('blue', 175, 150)
+Potion('green', 200, 150)
+Potion('yellow', 225, 150)
+Potion('red', 150, 175, size='big')
+Potion('blue', 175, 175, size='big')
+Potion('green', 200, 175, size='big')
+Potion('yellow', 225, 175, size='big')
 
 while True:
     for event in pygame.event.get():
