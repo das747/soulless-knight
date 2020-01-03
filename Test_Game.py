@@ -36,6 +36,11 @@ size = width, height = 1000, 770
 screen = pygame.display.set_mode(size)
 running = True
 all_sprites = pygame.sprite.Group()
+hero = pygame.sprite.Group()
+borders = pygame.sprite.Group()
+decorations = pygame.sprite.Group()
+weapon = pygame.sprite.Group()
+portal = pygame.sprite.Group()
 
 
 def draw_backpack():
@@ -81,16 +86,32 @@ def generate_level(level):
             elif level[y][x] == '@':
                 Floor(x, y)
                 i, j = x, y
+
     Weapon(6, 15, 'one_punch')
-    #Weapon(7, 17, 'one_punch')
+    # Weapon(7, 17, 'one_punch')
     new_player = Knight(i, j)
     for y in range(len(level)):
         for x in range(len(level[y])):
             if level[y][x] == '#':
                 Top_Wall(x, y)
+            elif level[y][x] == 'P':
+                Portal(x, y)
     draw_backpack()
     # вернем игрока, а также размер поля в клетках
     return new_player
+
+
+class Portal(pygame.sprite.Sprite):
+    portal_image = load_image("BluePortal.png", -1)
+
+    def __init__(self, pos_x, pos_y):
+        super().__init__(all_sprites)
+        self.image = Portal.portal_image
+        self.add(portal)
+        self.rect = self.image.get_rect()
+        # вычисляем маску для эффективного сравнения
+        self.mask = pygame.mask.from_surface(self.image)
+        self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
 
 class Knight(pygame.sprite.Sprite):
@@ -98,6 +119,7 @@ class Knight(pygame.sprite.Sprite):
 
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites)
+        self.level = 1
         self.image = Knight.knight
         self.add(hero)
         self.rect = self.image.get_rect()
@@ -139,10 +161,9 @@ class Knight(pygame.sprite.Sprite):
             screen.blit(text, (width // 2 - 210, height - 150))
             screen.blit(weapon_bar, (width // 2 - 210, height - 120))
 
-hero = pygame.sprite.Group()
-borders = pygame.sprite.Group()
-decorations = pygame.sprite.Group()
-weapon = pygame.sprite.Group()
+        if pygame.sprite.spritecollideany(self, portal):
+            self.level += 1
+            load_new_level(self.level)
 
 
 class Border(pygame.sprite.Sprite):
@@ -205,6 +226,17 @@ def terminate():
     pygame.quit()
     sys.exit()
 
+def load_new_level(number_of_level):
+    global all_sprites, hero, borders, decorations, weapon, portal, level, knight
+    all_sprites = pygame.sprite.Group()
+    hero = pygame.sprite.Group()
+    borders = pygame.sprite.Group()
+    decorations = pygame.sprite.Group()
+    weapon = pygame.sprite.Group()
+    portal = pygame.sprite.Group()
+    level = load_level('level_{}.txt'.format(number_of_level))
+    knight = generate_level(level)
+
 
 clock = pygame.time.Clock()
 
@@ -225,5 +257,7 @@ while True:
     screen.fill((0, 0, 0))
     all_sprites.draw(screen)
     all_sprites.update(pygame.event.get())
+    hero.update(pygame.event.get())
+
     pygame.display.flip()
-    clock.tick(80)
+    clock.tick(60)
