@@ -27,6 +27,8 @@ camera = Camera()
 
 tile_width = tile_height = 40
 FPS = 60
+level_seq = ('1', '2')  # последоваельность смены уровней
+cur_level = 0  # текущий уровень в последовательности
 size = width, height = 600, 600
 screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
@@ -61,8 +63,12 @@ def load_image(name, color_key=None):  # загрузка изображения
     return image
 
 
-def generate_level(level, hero, sex):  # прогрузка уровня
-    new_player, i, j = None, None, None
+def generate_level(level, hero):  # прогрузка уровня
+    all_sprites.remove(*items.sprites(), *top_layer.sprites(), *bottom_layer.sprites())
+    items.empty()
+    borders.empty()
+    top_layer.empty()
+    bottom_layer.empty()
     for y in range(len(level)):
         for x in range(len(level[y])):
             Floor(x, y)
@@ -71,11 +77,10 @@ def generate_level(level, hero, sex):  # прогрузка уровня
                 BottomWall(x, y)
                 TopWall(x, y)
             elif level[y][x] == '@':
-                i, j = x, y
-
-    new_player = Hero(hero, sex, i, j)
-    # вернем игрока, а также размер поля в клетках
-    return new_player
+                hero.set_pos(x * tile_width, y * tile_height)
+            elif level[y][x] == '*':
+                Portal(x * tile_width, y * tile_height, 2)
+    return len(level[0]), len(level)
 
 
 class AnimatedSprite(pygame.sprite.Sprite):  # база для анимированных спрайтов, режет листы анимаций
@@ -103,6 +108,11 @@ class Portal(AnimatedSprite):
         super().__init__(3, 4, x, y, load_image('portal.png'))
         self.anim_timer = 0
         self.add(items)
+
+    def picked(self, hero):
+        global cur_level
+        cur_level = (cur_level + 1) % len(level_seq)
+        generate_level(load_level(f'level_{level_seq[cur_level]}.txt'), hero)
 
     def update(self):
         self.anim_timer += 1 / FPS
@@ -182,6 +192,9 @@ class Hero(AnimatedSprite):
 
     def add_buff(self, buff):
         self.buffs.append(list(buff))
+
+    def set_pos(self, x, y):
+        self.rect.x, self.rect.y = x, y
 
     def move(self):  # отслеживание перемещения
         keys = pygame.key.get_pressed()
@@ -265,11 +278,12 @@ def terminate():
 
 clock = pygame.time.Clock()
 
-level = load_level('level_2.txt')
+level = load_level(f'level_{level_seq[cur_level]}.txt')
 for i in level:
     print(*i)
 
-hero = generate_level(level, 'lizard', 'f')
+hero = Hero('lizard', 'f', 0, 0)
+generate_level(level, hero)
 player = pygame.sprite.Group(hero)
 Potion('red', 150, 150)
 Potion('blue', 175, 150)
@@ -279,7 +293,6 @@ Potion('red', 150, 175, size='big')
 Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
-Portal(200, 200, 2)
 
 while True:
     for event in pygame.event.get():
