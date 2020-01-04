@@ -32,7 +32,7 @@ screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
 items = pygame.sprite.Group()  # все предметы
 top_layer = pygame.sprite.Group()  # группа для отрисовки всего что над персонажем
-bottom_layer = pygame.sprite.Group()   # группа для отриосвки всего что под персонажем
+bottom_layer = pygame.sprite.Group()  # группа для отриосвки всего что под персонажем
 
 
 def load_level(filename):  # загрузка уровня из текстового файла
@@ -50,8 +50,9 @@ def load_level(filename):  # загрузка уровня из текстово
 
 def load_image(name, color_key=None):  # загрузка изображения из папки data
     fullname = os.path.join('data', name)
-    image = pygame.image.load(fullname).convert()
+    image = pygame.image.load(fullname)
     if color_key is not None:
+        image = image.convert()
         if color_key == -1:
             color_key = image.get_at((0, 0))
         image.set_colorkey(color_key)
@@ -80,6 +81,7 @@ def generate_level(level, hero, sex):  # прогрузка уровня
 class AnimatedSprite(pygame.sprite.Sprite):  # база для анимированных спрайтов, режет листы анимаций
     def __init__(self, columns, rows, x, y, *sheets):
         super().__init__(all_sprites)
+        self.frame_lim = columns
         self.frames = []
         for sheet in sheets:
             self.cut_sheet(sheet, columns, rows)
@@ -95,6 +97,21 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
                 self.frames.append(sheet.subsurface(pygame.Rect(frame_location, self.rect.size)))
 
 
+class Portal(AnimatedSprite):
+    def __init__(self, x, y, portal_type=0):
+        self.portal_type = portal_type
+        super().__init__(3, 4, x, y, load_image('portal.png'))
+        self.anim_timer = 0
+        self.add(items)
+
+    def update(self):
+        self.anim_timer += 1 / FPS
+        if self.anim_timer >= 0.1:
+            self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.portal_type
+            self.anim_timer = 0
+        self.image = self.frames[self.cur_frame]
+
+
 class Potion(AnimatedSprite):  # любое зелье
     # каждое зелье бафает определённые статы
     types = {'red': (2, 0, 0, 0, -1), 'blue': (0, 80, 0, 0, -1), 'green': (0, 0, 0, 5, 5),
@@ -102,7 +119,7 @@ class Potion(AnimatedSprite):  # любое зелье
 
     def __init__(self, potion_type, x, y, size='small'):
         self.stats = (
-        potion_type, *[i * 2 if size == 'big' else i for i in Potion.types[potion_type]])
+            potion_type, *[i * 2 if size == 'big' else i for i in Potion.types[potion_type]])
         potion_name = '_'.join(['flask', size, potion_type, '1'])
         super().__init__(1, 1, x, y, load_image(potion_name + '.png'))
         self.add(items)
@@ -128,8 +145,8 @@ class Hero(AnimatedSprite):
         self.health, self.mana, self.dmg, self.speed = Hero.types[hero_type]
         self.max_health, self.max_mana = self.health, self.mana
         # анимации ожидания и движения
-        anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png']), -1),
-                       load_image('_'.join([hero_type, sex, 'run', 'anim.png']), -1))
+        anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png'])),
+                       load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
         super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets)
         mask_surface = pygame.Surface((40, 70), pygame.SRCALPHA, 32)
         self.frames = [pygame.transform.scale(frame, (32, 56)) for frame in self.frames]
@@ -202,8 +219,8 @@ class Hero(AnimatedSprite):
         for buff in self.buffs:
             buff[-1] -= 1 / FPS
         self.buffs = list(filter(lambda b: b[-1] > 0, self.buffs))
-        if self.anim_timer > 0.02 * self.speed:
-            self.cur_frame = (self.cur_frame + 1) % 4 + 4 * self.is_running
+        if self.anim_timer > 1 / self.get_speed():
+            self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
 
 
@@ -214,7 +231,7 @@ decorations = pygame.sprite.Group()
 class Border(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, borders, bottom_layer)
-        self.image = load_image("Wall.jpg", -1)
+        self.image = load_image("Wall.jpg")
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
@@ -223,21 +240,21 @@ class Border(pygame.sprite.Sprite):
 class TopWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, decorations, top_layer)
-        self.image = load_image("wall_top.jpg", -1)
+        self.image = load_image("wall_top.jpg")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y - 20)
 
 
 class BottomWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, decorations, bottom_layer)
-        self.image = load_image("wall_bottom.png", -1)
+        self.image = load_image("wall_bottom.png")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y + 20)
 
 
 class Floor(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, decorations, bottom_layer)
-        self.image = load_image("floor.jpg", -1)
+        self.image = load_image("floor.jpg")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
 
@@ -262,6 +279,7 @@ Potion('red', 150, 175, size='big')
 Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
+Portal(200, 200, 2)
 
 while True:
     for event in pygame.event.get():
