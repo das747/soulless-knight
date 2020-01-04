@@ -29,13 +29,13 @@ tile_width = tile_height = 40
 FPS = 60
 size = width, height = 600, 600
 screen = pygame.display.set_mode(size)
-all_sprites = pygame.sprite.Group()
-items = pygame.sprite.Group()
-top_layer = pygame.sprite.Group()
-bottom_layer = pygame.sprite.Group()
+all_sprites = pygame.sprite.Group()  # группа для обновления
+items = pygame.sprite.Group()  # все предметы
+top_layer = pygame.sprite.Group()  # группа для отрисовки всего что над персонажем
+bottom_layer = pygame.sprite.Group()   # группа для отриосвки всего что под персонажем
 
 
-def load_level(filename):
+def load_level(filename):  # загрузка уровня из текстового файла
     filename = "data/levels/" + filename
     # читаем уровень, убирая символы перевода строки
     with open(filename, 'r') as mapFile:
@@ -48,7 +48,7 @@ def load_level(filename):
     return list(map(lambda x: x.ljust(max_width, '.'), level_map))
 
 
-def load_image(name, color_key=None):
+def load_image(name, color_key=None):  # загрузка изображения из папки data
     fullname = os.path.join('data', name)
     image = pygame.image.load(fullname).convert()
     if color_key is not None:
@@ -60,15 +60,15 @@ def load_image(name, color_key=None):
     return image
 
 
-def generate_level(level, hero, sex):
+def generate_level(level, hero, sex):  # прогрузка уровня
     new_player, i, j = None, None, None
     for y in range(len(level)):
         for x in range(len(level[y])):
             Floor(x, y)
             if level[y][x] == '#':
                 Border(x, y)
-                Bottom_Wall(x, y)
-                Top_Wall(x, y)
+                BottomWall(x, y)
+                TopWall(x, y)
             elif level[y][x] == '@':
                 i, j = x, y
 
@@ -131,6 +131,12 @@ class Hero(AnimatedSprite):
         anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png']), -1),
                        load_image('_'.join([hero_type, sex, 'run', 'anim.png']), -1))
         super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets)
+        mask_surface = pygame.Surface((40, 70), pygame.SRCALPHA, 32)
+        self.frames = [pygame.transform.scale(frame, (32, 56)) for frame in self.frames]
+        for frame in self.frames:
+            mask_surface.blit(frame, (0, 0))
+            mask_surface.blit(pygame.transform.flip(frame, True, False), (0, 0))
+        self.mask = pygame.mask.from_surface(mask_surface)
         self.buffs = []
         self.direction = False
         self.is_running = False
@@ -191,8 +197,7 @@ class Hero(AnimatedSprite):
     def update(self, *args):  # здесь отрисовка
         self.move()
         self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
-        self.image = pygame.transform.scale(self.image, (32, 56))
-        self.mask = pygame.mask.from_surface(self.image)
+        # self.mask = pygame.mask.from_surface(self.image)
         self.anim_timer += (1 / FPS)
         for buff in self.buffs:
             buff[-1] -= 1 / FPS
@@ -215,23 +220,17 @@ class Border(pygame.sprite.Sprite):
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
 
-class Top_Wall(pygame.sprite.Sprite):
+class TopWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, decorations, top_layer)
         self.image = load_image("wall_top.jpg", -1)
-        self.rect = self.image.get_rect()
-        # вычисляем маску для эффективного сравнения
-        # self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y - 20)
 
 
-class Bottom_Wall(pygame.sprite.Sprite):
+class BottomWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, decorations, bottom_layer)
         self.image = load_image("wall_bottom.png", -1)
-        self.rect = self.image.get_rect()
-        # вычисляем маску для эффективного сравнения
-        # self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y + 20)
 
 
@@ -239,9 +238,6 @@ class Floor(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, decorations, bottom_layer)
         self.image = load_image("floor.jpg", -1)
-        self.rect = self.image.get_rect()
-        # вычисляем маску для эффективного сравнения
-        # self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
 
@@ -252,7 +248,7 @@ def terminate():
 
 clock = pygame.time.Clock()
 
-level = load_level('level_1.txt')
+level = load_level('level_2.txt')
 for i in level:
     print(*i)
 
