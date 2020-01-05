@@ -27,6 +27,7 @@ camera = Camera()
 
 tile_width = tile_height = 40
 FPS = 60
+clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
 size = width, height = 600, 600
@@ -83,6 +84,15 @@ def generate_level(level, hero):  # прогрузка уровня
     return len(level[0]), len(level)
 
 
+def highlight(rect, title, *stats):
+    font = pygame.font.Font(None, 25)
+    text = font.render('E) ' + title, 1, (255, 255, 255))
+    screen.blit(text, (rect.x + rect.w // 2 - text.get_rect().w // 2, rect.y - 25 - text.get_rect().h))
+    pygame.draw.polygon(screen, (255, 255, 255), ((rect.x + rect.w // 2, rect.y),
+                                                  (rect.x + rect.w // 2 - 15, rect.y - 15),
+                                                  (rect.x + rect.w // 2 + 15, rect.y - 15)))
+
+
 class AnimatedSprite(pygame.sprite.Sprite):  # база для анимированных спрайтов, режет листы анимаций
     def __init__(self, columns, rows, x, y, *sheets):
         super().__init__(all_sprites)
@@ -114,37 +124,44 @@ class Portal(AnimatedSprite):
         cur_level = (cur_level + 1) % len(level_seq)
         generate_level(load_level(f'level_{level_seq[cur_level]}.txt'), hero)
 
+    def highlight(self):
+        highlight(self.rect, 'Портал')
+
     def update(self):
         self.anim_timer += 1 / FPS
         if self.anim_timer >= 0.1:
-            self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.portal_type
+            self.cur_frame = (
+                                         self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.portal_type
             self.anim_timer = 0
         self.image = self.frames[self.cur_frame]
 
 
 class Potion(AnimatedSprite):  # любое зелье
     # каждое зелье бафает определённые статы
-    types = {'red': (2, 0, 0, 0, -1), 'blue': (0, 80, 0, 0, -1), 'green': (0, 0, 0, 5, 5),
-             'yellow': (0, 0, 5, 0, 5)}
+    types = {'red': ('здоровья', 2, 0, 0, 0, -1), 'blue': ('маны', 0, 80, 0, 0, -1),
+             'green': ('скорости', 0, 0, 0, 5, 5), 'yellow': ('урона', 0, 0, 5, 0, 5)}
 
     def __init__(self, potion_type, x, y, size='small'):
-        self.stats = (
-            potion_type, *[i * 2 if size == 'big' else i for i in Potion.types[potion_type]])
+        self.size = size
+        self.name = Potion.types[potion_type][0]
+        self.stats = Potion.types[potion_type][1:]
         potion_name = '_'.join(['flask', size, potion_type, '1'])
         super().__init__(1, 1, x, y, load_image(potion_name + '.png'))
         self.add(items)
 
     def picked(self, obj):
-        obj.heal(self.stats[1])
-        obj.restore_mana(self.stats[2])
-        obj.add_buff(self.stats[-3:])
+        obj.heal(self.stats[0] * (1 + (self.size == 'big')))
+        obj.restore_mana(self.stats[1] * (1 + (self.size == 'big')))
+        obj.add_buff([stat * 2 if self.size == 'big' else stat for stat in self.stats[-3:]])
         self.kill()
 
-    def update(self):  # подсвечивается при подходе
-        if not pygame.sprite.collide_mask(self, hero):
-            self.image = self.frames[0]
-        else:
-            pass
+    def highlight(self):
+        title = 'большое ' * (self.size == 'big') + 'зелье ' + self.name
+        highlight(self.rect, title.capitalize())
+
+    # def update(self):  # подсвечивается при подходе
+    #     if not pygame.sprite.collide_mask(self, hero):
+    #         self.image = self.frames[0]
 
 
 class Hero(AnimatedSprite):
@@ -237,6 +254,7 @@ class Hero(AnimatedSprite):
             self.anim_timer = 0
 
 
+
 borders = pygame.sprite.Group()
 decorations = pygame.sprite.Group()
 
@@ -276,7 +294,7 @@ def terminate():
     sys.exit()
 
 
-clock = pygame.time.Clock()
+
 
 level = load_level(f'level_{level_seq[cur_level]}.txt')
 for i in level:
@@ -294,17 +312,18 @@ Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
 
-while True:
+running = True
+pick_up = False
+
+while running:
+    pick_up = False
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             terminate()
 
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_e:
-                if pygame.sprite.spritecollideany(hero, items):
-                    for item in items.sprites():
-                        if pygame.sprite.collide_mask(hero, item):
-                            item.picked(hero)
+                pick_up = True
     camera.update(hero)
     # обновляем положение всех спрайтов
     for sprite in all_sprites:
@@ -314,6 +333,12 @@ while True:
     items.draw(screen)
     player.draw(screen)
     top_layer.draw(screen)
+    pick = pygame.sprite.spritecollide(hero, items, 0, pygame.sprite.collide_mask)
+    if pick:
+        pick[0].highlight()
+        if pick_up:
+            pick[0].picked(hero)
     pygame.display.flip()
     all_sprites.update()
+
     clock.tick(FPS)
