@@ -28,13 +28,15 @@ class Camera:
 
 camera = Camera()
 
-tile_width = tile_height = 40
-
 user32 = ctypes.windll.user32
 screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
-size = width, height = 1000, 770
+size = width, height = 1024, 760
 screen = pygame.display.set_mode(size)
+
 running = True
+tile_width = tile_height = int(40 * (width / 1024))
+print(tile_width)
+
 all_sprites = pygame.sprite.Group()
 hero = pygame.sprite.Group()
 borders = pygame.sprite.Group()
@@ -89,12 +91,12 @@ def generate_level(level):
 
     Weapon(6, 15, 'one_punch')
     # Weapon(7, 17, 'one_punch')
-    new_player = Knight(i, j)
+    new_player = Knight(load_image("Разбойник sheet.png", -1), 3, 1, i, j)
     for y in range(len(level)):
         for x in range(len(level[y])):
             if level[y][x] == '#':
                 Top_Wall(x, y)
-            elif level[y][x] == 'P':
+            if level[y][x] == 'P':
                 Portal(x, y)
     draw_backpack()
     # вернем игрока, а также размер поля в клетках
@@ -117,31 +119,55 @@ class Portal(pygame.sprite.Sprite):
 class Knight(pygame.sprite.Sprite):
     knight = load_image("Разбойник.png", -1)
 
-    def __init__(self, pos_x, pos_y):
+    def __init__(self, sheet, columns, rows, pos_x, pos_y):
         super().__init__(all_sprites)
         self.level = 1
         self.image = Knight.knight
+        self.image = pygame.transform.scale(self.image, (tile_width + tile_width // 2, tile_width + tile_width // 2))
         self.add(hero)
+        self.frames = []
+        self.cut_sheet(sheet, columns, rows)
+        self.cur_frame = 0
+        self.frame_count = 0
         self.rect = self.image.get_rect()
-        self.weapons = [0, 0]
-        self.weapon_selected = 0
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, self.rect.size)))
+
     def update(self, *args):
         args = args[0]
-        speed = 5
+        speed = int(4 * (tile_width / 40))
         keys = pygame.key.get_pressed()
         x, y = 0, 0
         if keys[pygame.K_LEFT]:
+            self.frame_count = (self.frame_count + 1) % 10
+            if self.frame_count == 0:
+                self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+                self.image = self.frames[self.cur_frame]
             self.rect = self.rect.move(-speed, 0)
+            self.image = pygame.transform.scale(self.image,
+                                                (tile_width + tile_width // 2, tile_width + tile_width // 2))
             x = -speed
-            self.image = pygame.transform.flip(self.knight, 1, 0)
+            self.image = pygame.transform.flip(self.image, 1, 0)
+
         elif keys[pygame.K_RIGHT]:
+            self.frame_count = (self.frame_count + 1) % 10
+            if self.frame_count == 0:
+                self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+                self.image = self.frames[self.cur_frame]
             self.rect = self.rect.move(speed, 0)
             x = speed
-            self.image = self.knight
+            self.image = pygame.transform.scale(self.image,
+                                                (tile_width + tile_width // 2, tile_width + tile_width // 2))
         while pygame.sprite.spritecollideany(self, borders):
             self.rect = self.rect.move(-x, 0)
         if keys[pygame.K_UP]:
@@ -170,7 +196,7 @@ class Border(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites)
         self.add(borders)
-        self.image = load_image("Wall.jpg", -1)
+        self.image = pygame.Surface([tile_width, tile_width // 2])
         self.rect = self.image.get_rect()
         # вычисляем маску для эффективного сравнения
         # self.mask = pygame.mask.from_surface(self.image)
@@ -182,10 +208,11 @@ class Top_Wall(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.add(decorations)
         self.image = load_image("wall_2.jpg", -1)
+        self.image = pygame.transform.scale(self.image, (tile_width, tile_width))
         self.rect = self.image.get_rect()
         # вычисляем маску для эффективного сравнения
         # self.mask = pygame.mask.from_surface(self.image)
-        self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y - 20)
+        self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y - tile_width // 2)
 
 
 class Botton_Wall(pygame.sprite.Sprite):
@@ -193,10 +220,11 @@ class Botton_Wall(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.add(decorations)
         self.image = load_image("wall_3.png", -1)
+        self.image = pygame.transform.scale(self.image, (tile_width, tile_width // 2))
         self.rect = self.image.get_rect()
         # вычисляем маску для эффективного сравнения
         # self.mask = pygame.mask.from_surface(self.image)
-        self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y + 20)
+        self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y + tile_width // 2)
 
 
 class Floor(pygame.sprite.Sprite):
@@ -204,6 +232,7 @@ class Floor(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.add(decorations)
         self.image = load_image("floor.jpg", -1)
+        self.image = pygame.transform.scale(self.image, (tile_width, tile_width))
         self.rect = self.image.get_rect()
         # вычисляем маску для эффективного сравнения
         # self.mask = pygame.mask.from_surface(self.image)
@@ -215,6 +244,7 @@ class Weapon(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.add(weapon)
         self.image = load_image("{}.png".format(name), -1)
+        self.image = pygame.transform.scale(self.image, (tile_width, tile_width))
         self.rect = self.image.get_rect()
         self.name = name
         # вычисляем маску для эффективного сравнения
@@ -225,6 +255,7 @@ class Weapon(pygame.sprite.Sprite):
 def terminate():
     pygame.quit()
     sys.exit()
+
 
 def load_new_level(number_of_level):
     global all_sprites, hero, borders, decorations, weapon, portal, level, knight
@@ -256,8 +287,7 @@ while True:
         camera.apply(sprite)
     screen.fill((0, 0, 0))
     all_sprites.draw(screen)
-    all_sprites.update(pygame.event.get())
     hero.update(pygame.event.get())
-
-    pygame.display.flip()
+    hero.update(pygame.event.get())
+    pygame.display.update()
     clock.tick(60)
