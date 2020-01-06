@@ -26,7 +26,7 @@ class Camera:
 camera = Camera()
 
 tile_width = tile_height = 40
-FPS = 60
+FPS = 30
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
 size = width, height = 1200, 1000
@@ -148,9 +148,9 @@ class Potion(AnimatedSprite):  # любое зелье
 
 
 class Hero(AnimatedSprite):
-
     # классы определяются статами
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
+    stat_bar = load_image("hero_bar.png", -1)
 
     def __init__(self, hero_type, sex, pos_x, pos_y):
         self.health, self.mana, self.dmg, self.speed = Hero.types[hero_type]
@@ -158,8 +158,9 @@ class Hero(AnimatedSprite):
         self.v = 0
         # анимации ожидания и движения
         anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png'])),
-                       load_image('_'.join([hero_type, sex, 'run', 'anim.png']))) # загрузка картинки через название
-        super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets) # и пол персонажа
+                       load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
+        # загрузка картинки через название и пол персонажа
+        super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets)
         mask_surface = pygame.Surface((40, 70), pygame.SRCALPHA, 32)
         self.frames = [pygame.transform.scale(frame, (32, 56)) for frame in self.frames]
         for frame in self.frames:
@@ -230,8 +231,6 @@ class Hero(AnimatedSprite):
             # while any([pygame.sprite.collide_mask(self, border) for border in borders]):
             #     self.rect = self.rect.move(0, 1)
 
-
-
     def update(self, *args):  # здесь отрисовка
         self.move()
         self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
@@ -244,13 +243,14 @@ class Hero(AnimatedSprite):
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
 
-        hero_bar = load_image("hero_bar.png", -1)
         font = pygame.font.Font(None, 30)
         health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
         mana = font.render(str(self.get_mana()) + '/' + str(self.max_mana), 1, (255, 255, 255))
-        screen.blit(hero_bar, (0, 0))
-        pygame.draw.rect(screen, (255, 64, 69), (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
-        pygame.draw.rect(screen, (72, 114, 164), (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
+        screen.blit(Hero.stat_bar, (0, 0))
+        pygame.draw.rect(screen, (255, 64, 69),
+                         (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
+        pygame.draw.rect(screen, (72, 114, 164),
+                         (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
         screen.blit(health, (120, 18))
         screen.blit(mana, (100, 49))
 
