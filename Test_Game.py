@@ -26,11 +26,11 @@ class Camera:
 camera = Camera()
 
 tile_width = tile_height = 40
-FPS = 60
+FPS = 30
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
-size = width, height = 600, 600
+size = width, height = 1200, 1000
 screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
 items = pygame.sprite.Group()  # все предметы
@@ -130,8 +130,7 @@ class Portal(AnimatedSprite):
     def update(self):
         self.anim_timer += 1 / FPS
         if self.anim_timer >= 0.1:
-            self.cur_frame = (
-                                         self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.portal_type
+            self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.portal_type
             self.anim_timer = 0
         self.image = self.frames[self.cur_frame]
 
@@ -145,6 +144,7 @@ class Potion(AnimatedSprite):  # любое зелье
         self.size = size
         self.name = Potion.types[potion_type][0]
         self.stats = Potion.types[potion_type][1:]
+
         potion_name = '_'.join(['flask', size, potion_type, '1'])
         super().__init__(1, 1, x, y, load_image(potion_name + '.png'))
         self.add(items)
@@ -167,13 +167,16 @@ class Potion(AnimatedSprite):  # любое зелье
 class Hero(AnimatedSprite):
     # классы определяются статами
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
+    stat_bar = load_image("hero_bar.png", -1)
 
     def __init__(self, hero_type, sex, pos_x, pos_y):
         self.health, self.mana, self.dmg, self.speed = Hero.types[hero_type]
         self.max_health, self.max_mana = self.health, self.mana
+        self.v = 0
         # анимации ожидания и движения
         anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png'])),
                        load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
+        # загрузка картинки через название и пол персонажа
         super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets)
         mask_surface = pygame.Surface((40, 70), pygame.SRCALPHA, 32)
         self.frames = [pygame.transform.scale(frame, (32, 56)) for frame in self.frames]
@@ -216,15 +219,17 @@ class Hero(AnimatedSprite):
     def move(self):  # отслеживание перемещения
         keys = pygame.key.get_pressed()
         x, y = 0, 0
-        if keys[pygame.K_LEFT]:
-            x = -1
+        if pygame.mouse.get_pos()[0] < width // 2:
             self.direction = True
-        elif keys[pygame.K_RIGHT]:
-            x = 1
+        else:
             self.direction = False
-        if keys[pygame.K_UP]:
+        if keys[pygame.K_a]:
+            x = -1
+        elif keys[pygame.K_d]:
+            x = 1
+        if keys[pygame.K_w]:
             y = -1
-        elif keys[pygame.K_DOWN]:
+        elif keys[pygame.K_s]:
             y = 1
         if x or y:
             self.is_running = True
@@ -252,7 +257,16 @@ class Hero(AnimatedSprite):
         if self.anim_timer > 1 / self.get_speed():
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
-
+        font = pygame.font.Font(None, 30)
+        health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
+        mana = font.render(str(self.get_mana()) + '/' + str(self.max_mana), 1, (255, 255, 255))
+        screen.blit(Hero.stat_bar, (0, 0))
+        pygame.draw.rect(screen, (255, 64, 69),
+                         (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
+        pygame.draw.rect(screen, (72, 114, 164),
+                         (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
+        screen.blit(health, (120, 18))
+        screen.blit(mana, (100, 49))
 
 
 borders = pygame.sprite.Group()
@@ -292,8 +306,6 @@ class Floor(pygame.sprite.Sprite):
 def terminate():
     pygame.quit()
     sys.exit()
-
-
 
 
 level = load_level(f'level_{level_seq[cur_level]}.txt')
@@ -338,7 +350,6 @@ while running:
         pick[0].highlight()
         if pick_up:
             pick[0].picked(hero)
-    pygame.display.flip()
     all_sprites.update()
-
+    pygame.display.flip()
     clock.tick(FPS)
