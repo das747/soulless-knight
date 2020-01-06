@@ -186,8 +186,8 @@ class Weapon(AnimatedSprite):
         self.rect.x, self.rect.y = x, y
 
     def align(self, rect):
-        self.rect.left = rect.centerx
-        self.rect.centery = rect.centery + rect.h // 3
+        self.rect.centerx = rect.centerx
+        self.rect.centery = rect.centery + rect.h // 2.5
 
     def picked(self, hero):
         hero.weapons.append(self)
@@ -205,6 +205,10 @@ class Weapon(AnimatedSprite):
             self.cur_frame = 0
         self.image = self.frames[self.cur_frame]
         if self.picked_hero:
+            new_image = pygame.Surface((int(self.image.get_rect().w * 1.75), self.image.get_rect().h),
+                                       pygame.SRCALPHA, 32)
+            new_image.blit(self.image, (new_image.get_rect().w - self.image.get_rect().w, 0))
+            self.image = new_image
             m_x, m_y = pygame.mouse.get_pos()
             angle = math.degrees(math.atan((hero.rect.y + hero.rect.h / 2 - m_y) /
                                            (abs(hero.rect.x + hero.rect.w / 2 - m_x) + 1)))
@@ -262,7 +266,8 @@ class Hero(AnimatedSprite):
         return self.speed + sum([buff[1] for buff in self.buffs])
 
     def next_weapon(self):
-        self.current_weapon = (self.current_weapon + 1) % len(self.weapons)
+        if self.weapons:
+            self.current_weapon = (self.current_weapon + 1) % len(self.weapons)
 
     def heal(self, hp):
         self.health = min(self.health + hp, self.max_health)
@@ -388,7 +393,7 @@ Potion('red', 150, 175, size='big')
 Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
-# Weapon('Один удар', 150, 250)
+Weapon('Один удар', 150, 250)
 Weapon('MP40', 150, 280)
 
 running = True
