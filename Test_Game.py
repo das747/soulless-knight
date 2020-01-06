@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 
 import pygame
 
@@ -164,6 +165,60 @@ class Potion(AnimatedSprite):  # любое зелье
     #         self.image = self.frames[0]
 
 
+class Weapon(AnimatedSprite):
+    types = {}
+    with open('data/weapons/weapons_ref.txt') as ref:
+        for line in ref.readlines():
+            name, stats = [i.strip() for i in line.split(':')]
+            types[name] = [i.strip() for i in stats.split(',')]
+
+    def __init__(self, name, x, y):
+        self.name = name
+        stats = Weapon.types[name]
+        self.dmg = int(stats[2])
+        self.mana_cost = int(stats[3])
+        super().__init__(int(stats[1]), 1, x, y, load_image('weapons/' + stats[0], -1))
+        self.add(items)
+        self.shooting = False
+        self.picked_hero = None
+
+    def set_pos(self, x, y):
+        self.rect.x, self.rect.y = x, y
+
+    def align(self, rect):
+        self.rect.left = rect.centerx
+        self.rect.centery = rect.centery + rect.h // 3
+
+    def picked(self, hero):
+        hero.weapons.append(self)
+        items.remove(self)
+        player.add(self)
+        self.picked_hero = hero
+
+    def highlight(self):
+        highlight(self.rect, self.name, self.mana_cost, self.dmg)
+
+    def update(self):
+        if self.shooting:
+            self.cur_frame = (self.cur_frame + 1) % self.frame_lim
+        else:
+            self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
+        if self.picked_hero:
+            m_x, m_y = pygame.mouse.get_pos()
+            angle = math.degrees(math.atan((hero.rect.y + hero.rect.h / 2 - m_y) /
+                                           (abs(hero.rect.x + hero.rect.w / 2 - m_x) + 1)))
+            old_rect = self.rect
+            self.image = pygame.transform.rotate(self.image, angle)
+            self.image = pygame.transform.flip(self.image, hero.direction, 0)
+            self.rect = self.image.get_rect()
+            # self.rect.left = old_rect.left
+            # self.rect.centery = old_rect.centery
+            self.rect.center = old_rect.center
+            pygame.draw.rect(screen, (0, 0, 0), self.rect, 2)
+        self.shooting = False
+
+
 class Hero(AnimatedSprite):
     # классы определяются статами
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
@@ -185,6 +240,8 @@ class Hero(AnimatedSprite):
             mask_surface.blit(pygame.transform.flip(frame, True, False), (0, 0))
         self.mask = pygame.mask.from_surface(mask_surface)
         self.buffs = []
+        self.weapons = []
+        self.current_weapon = 0
         self.direction = False
         self.is_running = False
         self.anim_timer = 0
@@ -203,6 +260,9 @@ class Hero(AnimatedSprite):
 
     def get_speed(self):
         return self.speed + sum([buff[1] for buff in self.buffs])
+
+    def next_weapon(self):
+        self.current_weapon = (self.current_weapon + 1) % len(self.weapons)
 
     def heal(self, hp):
         self.health = min(self.health + hp, self.max_health)
@@ -249,6 +309,8 @@ class Hero(AnimatedSprite):
     def update(self, *args):  # здесь отрисовка
         self.move()
         self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
+        self.rect.h = self.image.get_rect().h
+        self.rect.w = self.image.get_rect().w
         # self.mask = pygame.mask.from_surface(self.image)
         self.anim_timer += (1 / FPS)
         for buff in self.buffs:
@@ -257,6 +319,9 @@ class Hero(AnimatedSprite):
         if self.anim_timer > 1 / self.get_speed():
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
+        if self.weapons:
+            self.weapons[self.current_weapon].align(self.rect)
+
         font = pygame.font.Font(None, 30)
         health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
         mana = font.render(str(self.get_mana()) + '/' + str(self.max_mana), 1, (255, 255, 255))
@@ -267,7 +332,7 @@ class Hero(AnimatedSprite):
                          (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
         screen.blit(health, (120, 18))
         screen.blit(mana, (100, 49))
-
+        # pygame.draw.rect(screen, (255, 255, 255), self.rect)
 
 borders = pygame.sprite.Group()
 decorations = pygame.sprite.Group()
@@ -323,6 +388,8 @@ Potion('red', 150, 175, size='big')
 Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
+# Weapon('Один удар', 150, 250)
+Weapon('MP40', 150, 280)
 
 running = True
 pick_up = False
@@ -336,6 +403,8 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_e:
                 pick_up = True
+            elif event.key == pygame.K_r:
+                hero.next_weapon()
     camera.update(hero)
     # обновляем положение всех спрайтов
     for sprite in all_sprites:
