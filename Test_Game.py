@@ -1,6 +1,7 @@
 import os
 import sys
 import math
+import random
 
 import pygame
 
@@ -31,7 +32,7 @@ FPS = 30
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
-size = width, height = 1200, 1000
+size = width, height = 300, 300
 screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
 items = pygame.sprite.Group()  # все предметы
@@ -103,6 +104,7 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
             self.cut_sheet(sheet, columns, rows)
         self.cur_frame = 0
         self.image = self.frames[self.cur_frame]
+        self.rect = self.image.get_rect()
         self.rect = self.rect.move(x, y)
 
     def cut_sheet(self, sheet, columns, rows):
@@ -111,6 +113,29 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
             for i in range(columns):
                 frame_location = (self.rect.w * i, self.rect.h * j)
                 self.frames.append(sheet.subsurface(pygame.Rect(frame_location, self.rect.size)))
+
+
+class Explosion(AnimatedSprite):
+    sheet_format = {'ring': (8, 5), 'flat_effect': (6, 5), 'shockwave': (4, 5), 'explosion': (6, 5),
+                  'flame': (6, 5)}
+
+    def __init__(self, shape, color, x, y):
+        sheet_name = shape + '_' + color + '.png'
+        super().__init__(*Explosion.sheet_format[shape], x, y, load_image('effects/' + sheet_name))
+        self.rect.center = (x, y)
+        self.anim_timer = 0
+        self.add(top_layer)
+
+    def update(self):
+        self.anim_timer += 1 / FPS
+        if self.anim_timer >= 0.1 / len(self.frames):
+            self.cur_frame += 1
+            self.anim_timer = 0
+
+        self.image = self.frames[self.cur_frame]
+        if self.cur_frame >= len(self.frames) - 1:
+            self.kill()
+
 
 
 class Portal(AnimatedSprite):
@@ -165,6 +190,8 @@ class Potion(AnimatedSprite):  # любое зелье
     #         self.image = self.frames[0]
 
 
+# class Bullet()
+
 class Weapon(AnimatedSprite):
     types = {}
     with open('data/weapons/weapons_ref.txt') as ref:
@@ -179,8 +206,11 @@ class Weapon(AnimatedSprite):
         self.mana_cost = int(stats[3])
         super().__init__(int(stats[1]), 1, x, y, load_image('weapons/' + stats[0], -1))
         self.add(items)
+        self.angle = None
         self.shooting = False
         self.picked_hero = None
+        self.shoot_freq = 10
+        self.cooldown = 0
 
     def set_pos(self, x, y):
         self.rect.x, self.rect.y = x, y
@@ -198,11 +228,18 @@ class Weapon(AnimatedSprite):
     def highlight(self):
         highlight(self.rect, self.name, self.mana_cost, self.dmg)
 
+    def shoot(self):
+        if self.cooldown <= 0:
+            pass
+            self.shooting = True
+            self.cooldown = 1 / self.shoot_freq
+
     def update(self):
         if self.shooting:
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim
         else:
             self.cur_frame = 0
+        self.cooldown -= 1 / FPS
         self.image = self.frames[self.cur_frame]
         if self.picked_hero:
             new_image = pygame.Surface((int(self.image.get_rect().w * 1.75), self.image.get_rect().h),
@@ -216,10 +253,11 @@ class Weapon(AnimatedSprite):
             self.image = pygame.transform.rotate(self.image, angle)
             self.image = pygame.transform.flip(self.image, hero.direction, 0)
             self.rect = self.image.get_rect()
-            # self.rect.left = old_rect.left
-            # self.rect.centery = old_rect.centery
             self.rect.center = old_rect.center
             pygame.draw.rect(screen, (0, 0, 0), self.rect, 2)
+            self.angle = angle
+            if self.picked_hero.direction:
+                self.angle = 180 - self.angle
         self.shooting = False
 
 
@@ -245,7 +283,7 @@ class Hero(AnimatedSprite):
         self.mask = pygame.mask.from_surface(mask_surface)
         self.buffs = []
         self.weapons = []
-        self.current_weapon = 0
+        self.cur_weapon = 0
         self.direction = False
         self.is_running = False
         self.anim_timer = 0
@@ -267,7 +305,7 @@ class Hero(AnimatedSprite):
 
     def next_weapon(self):
         if self.weapons:
-            self.current_weapon = (self.current_weapon + 1) % len(self.weapons)
+            self.cur_weapon = (self.cur_weapon + 1) % len(self.weapons)
 
     def heal(self, hp):
         self.health = min(self.health + hp, self.max_health)
@@ -280,6 +318,10 @@ class Hero(AnimatedSprite):
 
     def set_pos(self, x, y):
         self.rect.x, self.rect.y = x, y
+
+    def shoot(self):
+        if self.weapons:
+            self.weapons[self.cur_weapon].shoot()
 
     def move(self):  # отслеживание перемещения
         keys = pygame.key.get_pressed()
@@ -298,8 +340,8 @@ class Hero(AnimatedSprite):
             y = 1
         if x or y:
             self.is_running = True
-            x = x * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5
-            y = y * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5
+            x = (x * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5) #/ FPS * 10
+            y = (y * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5) #/ FPS * 10
             self.rect = self.rect.move(x, 0)
             if any([pygame.sprite.collide_mask(self, border) for border in borders]):
                 self.rect = self.rect.move(-x, 0)
@@ -325,7 +367,7 @@ class Hero(AnimatedSprite):
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
         if self.weapons:
-            self.weapons[self.current_weapon].align(self.rect)
+            self.weapons[self.cur_weapon].align(self.rect)
 
         font = pygame.font.Font(None, 30)
         health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
@@ -337,7 +379,8 @@ class Hero(AnimatedSprite):
                          (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
         screen.blit(health, (120, 18))
         screen.blit(mana, (100, 49))
-        # pygame.draw.rect(screen, (255, 255, 255), self.rect)
+        # pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
+
 
 borders = pygame.sprite.Group()
 decorations = pygame.sprite.Group()
@@ -393,7 +436,7 @@ Potion('red', 150, 175, size='big')
 Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
-Weapon('Один удар', 150, 250)
+# Weapon('Один удар', 150, 250)
 Weapon('MP40', 150, 280)
 
 running = True
@@ -410,6 +453,11 @@ while running:
                 pick_up = True
             elif event.key == pygame.K_r:
                 hero.next_weapon()
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == pygame.BUTTON_LEFT:
+                hero.shoot()
+            Explosion(random.choice(list(Explosion.sheet_format.keys())), 'fire', *event.pos)
     camera.update(hero)
     # обновляем положение всех спрайтов
     for sprite in all_sprites:
