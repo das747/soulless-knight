@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import random
+import csv
 
 import pygame
 
@@ -32,7 +33,7 @@ FPS = 30
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
-size = width, height = 300, 300
+size = width, height = 1000, 1000
 screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
 items = pygame.sprite.Group()  # все предметы
@@ -117,7 +118,7 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
 
 class Explosion(AnimatedSprite):
     sheet_format = {'ring': (8, 5), 'flat_effect': (6, 5), 'shockwave': (4, 5), 'explosion': (6, 5),
-                  'flame': (6, 5)}
+                    'flame': (6, 5)}
 
     def __init__(self, shape, color, x, y):
         sheet_name = shape + '_' + color + '.png'
@@ -135,7 +136,6 @@ class Explosion(AnimatedSprite):
         self.image = self.frames[self.cur_frame]
         if self.cur_frame >= len(self.frames) - 1:
             self.kill()
-
 
 
 class Portal(AnimatedSprite):
@@ -194,22 +194,27 @@ class Potion(AnimatedSprite):  # любое зелье
 
 class Weapon(AnimatedSprite):
     types = {}
-    with open('data/weapons/weapons_ref.txt') as ref:
-        for line in ref.readlines():
-            name, stats = [i.strip() for i in line.split(':')]
-            types[name] = [i.strip() for i in stats.split(',')]
+    with open('data/weapons/weapons_ref.csv') as ref:
+        reader = csv.DictReader(ref)
+        for line in reader:
+            print(reader.fieldnames)
+            types[line['name']] = line
 
     def __init__(self, name, x, y):
         self.name = name
         stats = Weapon.types[name]
-        self.dmg = int(stats[2])
-        self.mana_cost = int(stats[3])
-        super().__init__(int(stats[1]), 1, x, y, load_image('weapons/' + stats[0], -1))
+        self.dmg = int(stats['damage'])
+        self.mana_cost = int(stats['mana'])
+        self.shoot_freq = float(stats['shots_per_second'])
+        self.align_k = float(stats['align'])
+        self.anim_length = float(stats['animation'])
+        super().__init__(int(stats['frames']), 1, x, y, load_image('weapons/' + stats['image']))
         self.add(items)
         self.angle = None
         self.shooting = False
         self.picked_hero = None
-        self.shoot_freq = 10
+        self.anim_timer = 0
+
         self.cooldown = 0
 
     def set_pos(self, x, y):
@@ -230,20 +235,23 @@ class Weapon(AnimatedSprite):
 
     def shoot(self):
         if self.cooldown <= 0:
-            pass
             self.shooting = True
             self.cooldown = 1 / self.shoot_freq
 
     def update(self):
         if self.shooting:
-            self.cur_frame = (self.cur_frame + 1) % self.frame_lim
+            self.anim_timer += 1 / FPS
+            if self.anim_timer >= self.anim_length / self.frame_lim:
+                self.cur_frame = (self.cur_frame + 1) % self.frame_lim
+                self.shooting = not self.cur_frame == 0
+                self.anim_timer = 0
         else:
             self.cur_frame = 0
         self.cooldown -= 1 / FPS
         self.image = self.frames[self.cur_frame]
         if self.picked_hero:
-            new_image = pygame.Surface((int(self.image.get_rect().w * 1.75), self.image.get_rect().h),
-                                       pygame.SRCALPHA, 32)
+            new_image = pygame.Surface((int(self.image.get_rect().w * self.align_k),
+                                        self.image.get_rect().h), pygame.SRCALPHA, 32)
             new_image.blit(self.image, (new_image.get_rect().w - self.image.get_rect().w, 0))
             self.image = new_image
             m_x, m_y = pygame.mouse.get_pos()
@@ -258,7 +266,6 @@ class Weapon(AnimatedSprite):
             self.angle = angle
             if self.picked_hero.direction:
                 self.angle = 180 - self.angle
-        self.shooting = False
 
 
 class Hero(AnimatedSprite):
@@ -436,8 +443,9 @@ Potion('red', 150, 175, size='big')
 Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
-# Weapon('Один удар', 150, 250)
+Weapon('Револьвер', 150, 250)
 Weapon('MP40', 150, 280)
+Weapon('Гранатомёт', 150, 300)
 
 running = True
 pick_up = False
@@ -457,7 +465,7 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == pygame.BUTTON_LEFT:
                 hero.shoot()
-            Explosion(random.choice(list(Explosion.sheet_format.keys())), 'fire', *event.pos)
+            # Explosion(random.choice(list(Explosion.sheet_format.keys())), 'fire', *event.pos)
     camera.update(hero)
     # обновляем положение всех спрайтов
     for sprite in all_sprites:
