@@ -27,6 +27,7 @@ camera = Camera()
 
 tile_width = tile_height = 40
 FPS = 60
+clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
 size = width, height = 1200, 1000
@@ -83,6 +84,15 @@ def generate_level(level, hero):  # прогрузка уровня
     return len(level[0]), len(level)
 
 
+def highlight(rect, title, *stats):
+    font = pygame.font.Font(None, 25)
+    text = font.render('E) ' + title, 1, (255, 255, 255))
+    screen.blit(text, (rect.x + rect.w // 2 - text.get_rect().w // 2, rect.y - 25 - text.get_rect().h))
+    pygame.draw.polygon(screen, (255, 255, 255), ((rect.x + rect.w // 2, rect.y),
+                                                  (rect.x + rect.w // 2 - 15, rect.y - 15),
+                                                  (rect.x + rect.w // 2 + 15, rect.y - 15)))
+
+
 class AnimatedSprite(pygame.sprite.Sprite):  # база для анимированных спрайтов, режет листы анимаций
     def __init__(self, columns, rows, x, y, *sheets):
         super().__init__(all_sprites)
@@ -114,6 +124,9 @@ class Portal(AnimatedSprite):
         cur_level = (cur_level + 1) % len(level_seq)
         generate_level(load_level(f'level_{level_seq[cur_level]}.txt'), hero)
 
+    def highlight(self):
+        highlight(self.rect, 'Портал')
+
     def update(self):
         self.anim_timer += 1 / FPS
         if self.anim_timer >= 0.1:
@@ -124,33 +137,50 @@ class Portal(AnimatedSprite):
 
 class Potion(AnimatedSprite):  # любое зелье
     # каждое зелье бафает определённые статы
-    types = {'red': (2, 0, 0, 0, -1), 'blue': (0, 80, 0, 0, -1), 'green': (0, 0, 0, 5, 5),
-             'yellow': (0, 0, 5, 0, 5)}
+    types = {'red': ('здоровья', 2, 0, 0, 0, -1), 'blue': ('маны', 0, 80, 0, 0, -1),
+             'green': ('скорости', 0, 0, 0, 5, 5), 'yellow': ('урона', 0, 0, 5, 0, 5)}
 
     def __init__(self, potion_type, x, y, size='small'):
-        self.stats = (
-            potion_type, *[i * 2 if size == 'big' else i for i in Potion.types[potion_type]])
+        self.size = size
+        self.name = Potion.types[potion_type][0]
+        self.stats = Potion.types[potion_type][1:]
+
         potion_name = '_'.join(['flask', size, potion_type, '1'])
         super().__init__(1, 1, x, y, load_image(potion_name + '.png'))
         self.add(items)
 
     def picked(self, obj):
-        obj.heal(self.stats[1])
-        obj.restore_mana(self.stats[2])
-        obj.add_buff(self.stats[-3:])
+        obj.heal(self.stats[0] * (1 + (self.size == 'big')))
+        obj.restore_mana(self.stats[1] * (1 + (self.size == 'big')))
+        obj.add_buff([stat * 2 if self.size == 'big' else stat for stat in self.stats[-3:]])
         self.kill()
 
-    def update(self):  # подсвечивается при подходе
-        if not pygame.sprite.collide_mask(self, hero):
-            self.image = self.frames[0]
-        else:
-            pass
+    def highlight(self):
+        title = 'большое ' * (self.size == 'big') + 'зелье ' + self.name
+        highlight(self.rect, title.capitalize())
+
+    # def update(self):  # подсвечивается при подходе
+    #     if not pygame.sprite.collide_mask(self, hero):
+    #         self.image = self.frames[0]
+
+
+class Botton(AnimatedSprite):
+    def __init__(self, x, y, picture):
+        self.image = load_image('exit_botton.png', -1)
+        # self.image = Botton.exit_botton
+        self.rect_image = self.image.get_rect().move(x, y)
+        self.rect = pygame.Rect(x, y, 177, 56)
+        screen.blit(self.image, (x, y))
+
+    def dar(self):
+        if self.rect_image.collidepoint(pygame.mouse.get_pos()):
+            print(3)
 
 
 class Hero(AnimatedSprite):
-
     # классы определяются статами
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
+    stat_bar = load_image("hero_bar.png", -1)
 
     def __init__(self, hero_type, sex, pos_x, pos_y):
         self.health, self.mana, self.dmg, self.speed = Hero.types[hero_type]
@@ -158,8 +188,9 @@ class Hero(AnimatedSprite):
         self.v = 0
         # анимации ожидания и движения
         anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png'])),
-                       load_image('_'.join([hero_type, sex, 'run', 'anim.png']))) # загрузка картинки через название
-        super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets) # и пол персонажа
+                       load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
+        # загрузка картинки через название и пол персонажа
+        super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets)
         mask_surface = pygame.Surface((40, 70), pygame.SRCALPHA, 32)
         self.frames = [pygame.transform.scale(frame, (32, 56)) for frame in self.frames]
         for frame in self.frames:
@@ -201,16 +232,14 @@ class Hero(AnimatedSprite):
     def move(self):  # отслеживание перемещения
         keys = pygame.key.get_pressed()
         x, y = 0, 0
-        if pygame.mouse.get_pos()[0] < height // 2:
+        if pygame.mouse.get_pos()[0] < width // 2:
             self.direction = True
         else:
             self.direction = False
         if keys[pygame.K_a]:
             x = -1
-
         elif keys[pygame.K_d]:
             x = 1
-
         if keys[pygame.K_w]:
             y = -1
         elif keys[pygame.K_s]:
@@ -230,8 +259,6 @@ class Hero(AnimatedSprite):
             # while any([pygame.sprite.collide_mask(self, border) for border in borders]):
             #     self.rect = self.rect.move(0, 1)
 
-
-
     def update(self, *args):  # здесь отрисовка
         self.move()
         self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
@@ -244,13 +271,15 @@ class Hero(AnimatedSprite):
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
 
-        hero_bar = load_image("hero_bar.png", -1)
+        # рисуем кол-во жизней и маны героя
         font = pygame.font.Font(None, 30)
         health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
         mana = font.render(str(self.get_mana()) + '/' + str(self.max_mana), 1, (255, 255, 255))
-        screen.blit(hero_bar, (0, 0))
-        pygame.draw.rect(screen, (255, 64, 69), (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
-        pygame.draw.rect(screen, (72, 114, 164), (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
+        screen.blit(Hero.stat_bar, (0, 0))
+        pygame.draw.rect(screen, (255, 64, 69),
+                         (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
+        pygame.draw.rect(screen, (72, 114, 164),
+                         (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
         screen.blit(health, (120, 18))
         screen.blit(mana, (100, 49))
 
@@ -294,12 +323,12 @@ def terminate():
     sys.exit()
 
 
-clock = pygame.time.Clock()
-
 level = load_level(f'level_{level_seq[cur_level]}.txt')
 for i in level:
     print(*i)
 
+#pygame.mouse.set_visible(False)  # делаем курсор невидимым
+cursor = load_image('cursor.png', -1)
 hero = Hero('lizard', 'f', 0, 0)
 generate_level(level, hero)
 player = pygame.sprite.Group(hero)
@@ -312,27 +341,76 @@ Potion('blue', 175, 175, size='big')
 Potion('green', 200, 175, size='big')
 Potion('yellow', 225, 175, size='big')
 
-while True:
+main_menu = True
+running = False
+pick_up = False
+
+
+def pause():   # функция главного меню и паузы
+    pause = True
+    image = load_image('exit_botton.png', -1)
+    exit = image.get_rect().move(100, 100)
+    screen.blit(image, (100, 100))
+
+    image = load_image('play_botton.png', -1)
+    resume = image.get_rect().move(100, 200)
+    screen.blit(image, (100, 200))
+
+    pygame.display.flip()
+    while pause:
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos  # gets mouse position
+                if resume.collidepoint(mouse_pos):
+                    pause = False
+                    return 'Play'
+                elif exit.collidepoint(mouse_pos):
+                    pause = False
+                    return 'Exit'
+
+
+
+
+while main_menu:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             terminate()
 
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_e:
-                if pygame.sprite.spritecollideany(hero, items):
-                    for item in items.sprites():
-                        if pygame.sprite.collide_mask(hero, item):
-                            item.picked(hero)
-    camera.update(hero)
-    # обновляем положение всех спрайтов
-    for sprite in all_sprites:
-        camera.apply(sprite)
     screen.fill((0, 0, 0))
-    bottom_layer.draw(screen)
-    items.draw(screen)
-    player.draw(screen)
-    top_layer.draw(screen)
-    all_sprites.update()
-    pygame.display.flip()
+    if pause() == 'Play': # проверяем нажата ли кнопка начала игры, если да, то запускаем
+        running = True
+    elif pause() == 'Exit':
+        terminate()
 
-    clock.tick(FPS)
+
+    while running:
+        pick_up = False
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_e:
+                    pick_up = True
+                elif event.key == pygame.K_ESCAPE: # игра оставнавливается, если нажать Esc
+                    if pause() == 'Exit':
+                        running = False
+
+        camera.update(hero)
+        # обновляем положение всех спрайтов
+        for sprite in all_sprites:
+            camera.apply(sprite)
+        screen.fill((0, 0, 0))
+        bottom_layer.draw(screen)
+        items.draw(screen)
+        player.draw(screen)
+        top_layer.draw(screen)
+        pick = pygame.sprite.spritecollide(hero, items, 0, pygame.sprite.collide_mask)
+        if pick:
+            pick[0].highlight()
+            if pick_up:
+                pick[0].picked(hero)
+        all_sprites.update()
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 26, pygame.mouse.get_pos()[1] - 26))  # рисуем свой курсор
+        pygame.display.flip()
+        clock.tick(FPS)
