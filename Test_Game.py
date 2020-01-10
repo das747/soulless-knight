@@ -117,11 +117,13 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
 
 
 class Explosion(AnimatedSprite):
-    sheet_format = {'ring': (8, 5), 'flat_effect': (6, 5), 'shockwave': (4, 5), 'explosion': (6, 5),
-                    'flame': (6, 5)}
+    # sheet_format = {'ring': (8, 5), 'flat_effect': (6, 5), 'shockwave': (4, 5), 'explosion': (6, 5),
+    #                 'flame': (6, 5)}
+    sheet_format = {'1': (8, 1), '2': (8, 1), '3': (10, 1), '4': (12, 1), '5': (22, 1), '6': (8, 1)}
 
-    def __init__(self, shape, color, x, y):
-        sheet_name = shape + '_' + color + '.png'
+    def __init__(self,  x, y, shape='1',):
+        # sheet_name = shape + '_' + color + '.png'
+        sheet_name = 'explosion-' + shape + '.png'
         super().__init__(*Explosion.sheet_format[shape], x, y, load_image('effects/' + sheet_name))
         self.rect.center = (x, y)
         self.anim_timer = 0
@@ -129,7 +131,7 @@ class Explosion(AnimatedSprite):
 
     def update(self):
         self.anim_timer += 1 / FPS
-        if self.anim_timer >= 0.1 / len(self.frames):
+        if self.anim_timer >= 0.5 / len(self.frames):
             self.cur_frame += 1
             self.anim_timer = 0
 
@@ -190,7 +192,23 @@ class Potion(AnimatedSprite):  # любое зелье
     #         self.image = self.frames[0]
 
 
-# class Bullet()
+class Bullet(AnimatedSprite):
+    def __init__(self, x, y, direction, bullet_type=''):
+        super().__init__(1, 1, x, y, load_image('weapons/bullet' + bullet_type + '.png'))
+        self.rect.center = (x, y)
+        for i, frame in enumerate(self.frames):
+            self.frames[i] = pygame.transform.rotate(frame, math.degrees(direction))
+        self.image = self.frames[self.cur_frame]
+        self.add(player)
+        self.speed = 30
+        self.speed_y = -math.sin(direction) * self.speed
+        self.speed_x = math.cos(direction) * self.speed
+
+    def update(self):
+        self.cur_frame = (self.cur_frame + 1) % self.frame_lim
+        self.image = self.frames[self.cur_frame]
+        self.rect = self.rect.move(self.speed_x, self.speed_y)
+
 
 class Weapon(AnimatedSprite):
     types = {}
@@ -235,6 +253,12 @@ class Weapon(AnimatedSprite):
 
     def shoot(self):
         if self.cooldown <= 0:
+
+            print(math.degrees(self.angle))
+            base_rect = self.frames[0].get_rect()
+            x = self.rect.centerx + math.cos(self.angle) * base_rect.w / 2 # - math.cos(self.angle) * self.rect.h / 2
+            y = self.rect.centery - math.sin(self.angle) * base_rect.w / 2 # + math.sin(self.angle) * self.rect.h / 2
+            Bullet(x, y, self.angle)
             self.shooting = True
             self.cooldown = 1 / self.shoot_freq
 
@@ -255,17 +279,17 @@ class Weapon(AnimatedSprite):
             new_image.blit(self.image, (new_image.get_rect().w - self.image.get_rect().w, 0))
             self.image = new_image
             m_x, m_y = pygame.mouse.get_pos()
-            angle = math.degrees(math.atan((hero.rect.y + hero.rect.h / 2 - m_y) /
-                                           (abs(hero.rect.x + hero.rect.w / 2 - m_x) + 1)))
+            angle = math.atan((hero.rect.y + hero.rect.h / 2 - m_y) /
+                              (abs(hero.rect.x + hero.rect.w / 2 - m_x) + 1))
             old_rect = self.rect
-            self.image = pygame.transform.rotate(self.image, angle)
+            self.image = pygame.transform.rotate(self.image, math.degrees(angle))
             self.image = pygame.transform.flip(self.image, hero.direction, 0)
             self.rect = self.image.get_rect()
             self.rect.center = old_rect.center
             pygame.draw.rect(screen, (0, 0, 0), self.rect, 2)
             self.angle = angle
             if self.picked_hero.direction:
-                self.angle = 180 - self.angle
+                self.angle = math.pi - self.angle
 
 
 class Hero(AnimatedSprite):
@@ -465,7 +489,8 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == pygame.BUTTON_LEFT:
                 hero.shoot()
-            # Explosion(random.choice(list(Explosion.sheet_format.keys())), 'fire', *event.pos)
+            # Explosion(*event.pos, random.choice(list(Explosion.sheet_format.keys())))
+            # Bullet(*event.pos, hero.weapons[hero.cur_weapon].angle)
     camera.update(hero)
     # обновляем положение всех спрайтов
     for sprite in all_sprites:
