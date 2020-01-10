@@ -2,8 +2,13 @@ import os
 import sys
 
 import pygame
+import time
 
 pygame.init()
+
+import tkinter as tk
+
+root = tk.Tk()
 
 
 class Camera:
@@ -29,8 +34,10 @@ tile_width = tile_height = 40
 FPS = 60
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
-size = width, height = 1200, 1000
-screen = pygame.display.set_mode(size)
+# размеры экрана
+fullscreen_size = fullscreen_width, fullscreen_height = root.winfo_screenwidth(), root.winfo_screenheight()
+size = width, height = 1000, 1000
+screen = pygame.display.set_mode(size, pygame.NOFRAME)
 
 
 def load_level(filename):  # загрузка уровня из текстового файла
@@ -347,7 +354,57 @@ def pause():  # функция главного меню и паузы
                     return 'Exit'
 
 
+def menu():  # функция главного меню и паузы
+    image = load_image('exit_button.png', -1)
+    exit_btn = image.get_rect().move(100, 100)
+    screen.blit(image, (100, 100))
+
+    image = load_image('play_button.png', -1)
+    resume_btn = image.get_rect().move(100, 200)
+    screen.blit(image, (100, 200))
+
+    image = load_image('full_disp.png', -1)
+    full_disp_btn = image.get_rect().move(100, 300)
+    screen.blit(image, (100, 300))
+
+    pygame.display.flip()
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos  # gets mouse position
+                if resume_btn.collidepoint(mouse_pos):
+                    return 'Play'
+                elif exit_btn.collidepoint(mouse_pos):
+                    return 'Exit'
+                elif full_disp_btn.collidepoint(mouse_pos):
+                    if size == (root.winfo_screenwidth(), root.winfo_screenheight()):
+                        return 'Not_full'
+                    else:
+                        return 'Full'
+
+
 while main_menu:
+    # screen.fill((0, 0, 0))
+    fon = pygame.transform.scale(load_image('menu_background.jpg'), size)
+    screen.blit(fon, (0, 0))
+
+    action = menu()
+    if action == 'Play':  # проверяем нажата ли кнопка начала игры, если да, то запускаем
+        running = True
+    elif action == 'Exit':
+        terminate()
+    elif action == 'Full':
+        fullscreen_size, size = size, fullscreen_size
+        fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
+        screen = pygame.display.set_mode(size, pygame.NOFRAME | pygame.FULLSCREEN)
+    elif action == 'Not_full':
+        fullscreen_size, size = size, fullscreen_size
+        fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
+        screen = pygame.display.set_mode(size, pygame.NOFRAME)
+
     cur_level = 0  # текущий уровень в последовательности
     all_sprites = pygame.sprite.Group()  # группа для обновления
     items = pygame.sprite.Group()  # все предметы
@@ -376,12 +433,7 @@ while main_menu:
         if event.type == pygame.QUIT:
             terminate()
 
-    screen.fill((0, 0, 0))
-    action = pause()
-    if action == 'Play':  # проверяем нажата ли кнопка начала игры, если да, то запускаем
-        running = True
-    elif action == 'Exit':
-        terminate()
+    pygame.display.flip()
 
     while running:
         pick_up = False
@@ -401,6 +453,8 @@ while main_menu:
         for sprite in all_sprites:
             camera.apply(sprite)
         screen.fill((0, 0, 0))
+        # fon = pygame.transform.scale(load_image('menu_background.jpg'), (width, height))
+        # screen.blit(fon, (0, 0))
         bottom_layer.draw(screen)
         items.draw(screen)
         player.draw(screen)
