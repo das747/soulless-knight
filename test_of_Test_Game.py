@@ -4,10 +4,7 @@ import sys
 import pygame
 
 pygame.init()
-
-import tkinter as tk
-
-root = tk.Tk()
+pygame.display.set_mode((0, 0))
 
 
 class Camera:
@@ -33,11 +30,12 @@ tile_width = tile_height = 40
 FPS = 60
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
-fullscreen_size = fullscreen_width, fullscreen_height = root.winfo_screenwidth(), root.winfo_screenheight()
-size = width, height = 1200, 1000
+fullscreen_size = fullscreen_width, fullscreen_height = pygame.display.get_window_size()
+size = width, height = 1000, 720
 pos_x = fullscreen_width / 2 - width / 2
 pos_y = fullscreen_height / 2 - height / 2
 os.environ['SDL_VIDEO_WINDOW_POS'] = '%i,%i' % (pos_x, pos_y)
+fullscreen = False
 
 screen = pygame.display.set_mode(size, pygame.NOFRAME)
 
@@ -364,10 +362,7 @@ def menu():  # функция главного меню и паузы
                 elif exit_btn.collidepoint(mouse_pos):
                     return 'Exit'
                 elif full_disp_btn.collidepoint(mouse_pos):
-                    if size == (root.winfo_screenwidth(), root.winfo_screenheight()):
-                        return 'Not_full'
-                    else:
-                        return 'Full'
+                    return 'Switch_mode'
 
 
 pygame.mouse.set_visible(False)  # делаем курсор невидимым
@@ -381,14 +376,14 @@ while main_menu:
         running = True
     elif action == 'Exit':
         terminate()
-    elif action == 'Full':
+    elif action == 'Switch_mode':
+        fullscreen = not fullscreen
         fullscreen_size, size = size, fullscreen_size
         fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
-        screen = pygame.display.set_mode(size, pygame.NOFRAME | pygame.FULLSCREEN)
-    elif action == 'Not_full':
-        fullscreen_size, size = size, fullscreen_size
-        fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
-        screen = pygame.display.set_mode(size, pygame.NOFRAME)
+        if fullscreen:
+            screen = pygame.display.set_mode(size, pygame.NOFRAME | pygame.FULLSCREEN)
+        else:
+            screen = pygame.display.set_mode(size, pygame.NOFRAME)
 
     cur_level = 0  # текущий уровень в последовательности
     all_sprites = pygame.sprite.Group()  # группа для обновления
@@ -413,11 +408,11 @@ while main_menu:
     Potion('green', 200, 175, size='big')
     Potion('yellow', 225, 175, size='big')
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            terminate()
-
-    pygame.display.flip()
+    # for event in pygame.event.get():
+    #     if event.type == pygame.QUIT:
+    #         terminate()
+    #
+    # pygame.display.flip()
 
     while running:
         pick_up = False
