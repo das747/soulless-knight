@@ -1,5 +1,6 @@
 import os
 import sys
+import multiprocessing
 
 import pygame
 import time
@@ -30,13 +31,20 @@ class Camera:
 
 camera = Camera()
 
+
+#os.environ['SDL_VIDEO_CENTERED'] = '0'
 tile_width = tile_height = 40
 FPS = 60
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 # размеры экрана
 fullscreen_size = fullscreen_width, fullscreen_height = root.winfo_screenwidth(), root.winfo_screenheight()
-size = width, height = 1000, 1000
+size = width, height = 1600, 900
+
+pos_x = fullscreen_width / 2 - width / 2
+pos_y = fullscreen_height / 2 - height / 2
+os.environ['SDL_VIDEO_WINDOW_POS'] = '%i,%i' % (pos_x, pos_y)
+
 screen = pygame.display.set_mode(size, pygame.NOFRAME)
 
 
@@ -289,6 +297,7 @@ class Hero(AnimatedSprite):
 
 borders = pygame.sprite.Group()
 decorations = pygame.sprite.Group()
+cursor = load_image('cursor.png', -1)
 
 
 class Border(pygame.sprite.Sprite):
@@ -332,16 +341,23 @@ pick_up = False
 
 
 def pause():  # функция главного меню и паузы
-    image = load_image('exit_button.png', -1)
-    exit_btn = image.get_rect().move(100, 100)
-    screen.blit(image, (100, 100))
-
-    image = load_image('play_button.png', -1)
-    resume_btn = image.get_rect().move(100, 200)
-    screen.blit(image, (100, 200))
-
-    pygame.display.flip()
     while True:
+        bottom_layer.draw(screen)
+        items.draw(screen)
+        player.draw(screen)
+        top_layer.draw(screen)
+        image = load_image('pause_menu.png', -1)
+        screen.blit(image, (100, 100))
+        image = load_image('exit_button.png', -1)
+        exit_btn = image.get_rect().move(400, 190)
+        screen.blit(image, (400, 190))
+
+        image = load_image('play_button.png', -1)
+        resume_btn = image.get_rect().move(150, 190)
+        screen.blit(image, (150, 190))
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 26, pygame.mouse.get_pos()[1] - 26))
+        pygame.display.flip()
+        screen.fill((0, 0, 0))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -355,20 +371,22 @@ def pause():  # функция главного меню и паузы
 
 
 def menu():  # функция главного меню и паузы
-    image = load_image('exit_button.png', -1)
-    exit_btn = image.get_rect().move(100, 100)
-    screen.blit(image, (100, 100))
-
-    image = load_image('play_button.png', -1)
-    resume_btn = image.get_rect().move(100, 200)
-    screen.blit(image, (100, 200))
-
-    image = load_image('full_disp.png', -1)
-    full_disp_btn = image.get_rect().move(100, 300)
-    screen.blit(image, (100, 300))
-
-    pygame.display.flip()
     while True:
+        screen.blit(fon, (0, 0))
+        image = load_image('exit_button.png', -1)
+        exit_btn = image.get_rect().move(100, 100)
+        screen.blit(image, (100, 100))
+
+        image = load_image('play_button.png', -1)
+        resume_btn = image.get_rect().move(100, 200)
+        screen.blit(image, (100, 200))
+
+        image = load_image('full_disp.png', -1)
+        full_disp_btn = image.get_rect().move(100, 300)
+        screen.blit(image, (100, 300))
+
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 26, pygame.mouse.get_pos()[1] - 26))
+        pygame.display.flip()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -384,7 +402,7 @@ def menu():  # функция главного меню и паузы
                         return 'Not_full'
                     else:
                         return 'Full'
-
+pygame.mouse.set_visible(False)  # делаем курсор невидимым
 
 while main_menu:
     # screen.fill((0, 0, 0))
@@ -414,8 +432,8 @@ while main_menu:
     level = load_level(f'level_{level_seq[cur_level]}.txt')
     for i in level:
         print(*i)
-    # pygame.mouse.set_visible(False)  # делаем курсор невидимым
-    cursor = load_image('cursor.png', -1)
+
+
     hero = Hero('lizard', 'f', 0, 0)
     generate_level(level, hero)
     player = pygame.sprite.Group(hero)
@@ -459,6 +477,7 @@ while main_menu:
         items.draw(screen)
         player.draw(screen)
         top_layer.draw(screen)
+
         pick = pygame.sprite.spritecollide(hero, items, 0, pygame.sprite.collide_mask)
         if pick:
             pick[0].highlight()
@@ -469,3 +488,5 @@ while main_menu:
         screen.blit(cursor, (pygame.mouse.get_pos()[0] - 26, pygame.mouse.get_pos()[1] - 26))
         pygame.display.flip()
         clock.tick(FPS)
+
+
