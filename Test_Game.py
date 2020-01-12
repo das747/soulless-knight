@@ -33,7 +33,7 @@ FPS = 30
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
-size = width, height = 1000, 1000
+size = width, height = 600, 600
 screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
 items = pygame.sprite.Group()  # все предметы
@@ -208,6 +208,9 @@ class Bullet(AnimatedSprite):
         self.cur_frame = (self.cur_frame + 1) % self.frame_lim
         self.image = self.frames[self.cur_frame]
         self.rect = self.rect.move(self.speed_x, self.speed_y)
+        if pygame.sprite.spritecollideany(self, borders, pygame.sprite.collide_mask):
+            Explosion(self.rect.centerx, self.rect.centery)
+            self.kill()
 
 
 class Weapon(AnimatedSprite):
@@ -256,8 +259,8 @@ class Weapon(AnimatedSprite):
 
             print(math.degrees(self.angle))
             base_rect = self.frames[0].get_rect()
-            x = self.rect.centerx + math.cos(self.angle) * base_rect.w / 2 # - math.cos(self.angle) * self.rect.h / 2
-            y = self.rect.centery - math.sin(self.angle) * base_rect.w / 2 # + math.sin(self.angle) * self.rect.h / 2
+            x = self.rect.centerx + math.cos(self.angle) * base_rect.w / 2 # + math.cos(90 + self.angle) * base_rect.h / 2
+            y = self.rect.centery - math.sin(self.angle) * base_rect.w / 2 # - math.sin(90 + self.angle) * base_rect.h / 2
             Bullet(x, y, self.angle)
             self.shooting = True
             self.cooldown = 1 / self.shoot_freq
@@ -352,7 +355,10 @@ class Hero(AnimatedSprite):
 
     def shoot(self):
         if self.weapons:
-            self.weapons[self.cur_weapon].shoot()
+            weapon = self.weapons[self.cur_weapon]
+            if self.get_mana() >= weapon.mana_cost:
+                self.mana -= weapon.mana_cost
+                weapon.shoot()
 
     def move(self):  # отслеживание перемещения
         keys = pygame.key.get_pressed()
@@ -404,10 +410,12 @@ class Hero(AnimatedSprite):
         health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
         mana = font.render(str(self.get_mana()) + '/' + str(self.max_mana), 1, (255, 255, 255))
         screen.blit(Hero.stat_bar, (0, 0))
-        pygame.draw.rect(screen, (255, 64, 69),
-                         (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
-        pygame.draw.rect(screen, (72, 114, 164),
-                         (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
+        if self.get_health():
+            pygame.draw.rect(screen, (255, 64, 69),
+                             (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
+        if self.get_mana():
+            pygame.draw.rect(screen, (72, 114, 164),
+                             (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
         screen.blit(health, (120, 18))
         screen.blit(mana, (100, 49))
         # pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
