@@ -6,10 +6,7 @@ import pygame
 import time
 
 pygame.init()
-
-import tkinter as tk
-
-root = tk.Tk()
+pygame.display.set_mode((0, 0))
 
 
 class Camera:
@@ -37,8 +34,8 @@ FPS = 60
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 # размеры экрана
-fullscreen_size = fullscreen_width, fullscreen_height = root.winfo_screenwidth(), root.winfo_screenheight()
-size = width, height = 1600, 900
+fullscreen_size = fullscreen_width, fullscreen_height = pygame.display.get_window_size()
+size = width, height = 1000, 900
 
 # pos_x = fullscreen_width / 2 - width / 2
 # pos_y = fullscreen_height / 2 - height / 2
@@ -187,12 +184,12 @@ class Potion(AnimatedSprite):  # любое зелье
 #         if self.rect_image.collidepoint(pygame.mouse.get_pos()):
 #             print(3)
 
-class ShowHero(pygame.sprite.Sprite):
+class ShowHero(AnimatedSprite):
     def __init__(self, x, y, hero_type):
         anim_sheets = load_image('_'.join(['lizard', 'f', 'idle', 'anim.png']))
-        screen.blit(anim_sheets, (0, 0))
-        pygame.display.flip()
-        time.sleep(3)
+        # screen.blit(anim_sheets, (0, 0))
+        # pygame.display.flip()
+        # time.sleep(3)
 
         super().__init__(4, 1, 0, 0, anim_sheets)
         self.anim_timer = 0
@@ -200,7 +197,7 @@ class ShowHero(pygame.sprite.Sprite):
     def update(self):
         self.anim_timer += 1 / FPS
         if self.anim_timer >= 0.1:
-            self.cur_frame = (self.cur_frame + 1) % 4
+            self.cur_frame = (self.cur_frame + 1) % self.frame_lim
             self.anim_timer = 0
         self.image = self.frames[self.cur_frame]
 
@@ -452,7 +449,7 @@ def menu():  # функция главного меню и паузы
                 elif exit_btn.collidepoint(mouse_pos):
                     return 'Exit'
                 elif full_disp_btn.collidepoint(mouse_pos):
-                    if size == (root.winfo_screenwidth(), root.winfo_screenheight()):
+                    if size == (fullscreen_width, fullscreen_height):
                         return 'Not_full'
                     else:
                         return 'Full'
