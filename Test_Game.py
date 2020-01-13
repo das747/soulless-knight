@@ -31,8 +31,7 @@ class Camera:
 
 camera = Camera()
 
-
-#os.environ['SDL_VIDEO_CENTERED'] = '0'
+# os.environ['SDL_VIDEO_CENTERED'] = '0'
 tile_width = tile_height = 40
 FPS = 60
 clock = pygame.time.Clock()
@@ -41,10 +40,11 @@ level_seq = ('1', '2')  # последоваельность смены уров
 fullscreen_size = fullscreen_width, fullscreen_height = root.winfo_screenwidth(), root.winfo_screenheight()
 size = width, height = 1600, 900
 
-pos_x = fullscreen_width / 2 - width / 2
-pos_y = fullscreen_height / 2 - height / 2
-os.environ['SDL_VIDEO_WINDOW_POS'] = '%i,%i' % (pos_x, pos_y)
-
+# pos_x = fullscreen_width / 2 - width / 2
+# pos_y = fullscreen_height / 2 - height / 2
+# os.environ['SDL_VIDEO_WINDOW_POS'] = '%d,%d' % (pos_x, pos_y)
+for i in list(os.environ):
+    print(i)
 screen = pygame.display.set_mode(size, pygame.NOFRAME)
 
 
@@ -187,6 +187,23 @@ class Potion(AnimatedSprite):  # любое зелье
 #         if self.rect_image.collidepoint(pygame.mouse.get_pos()):
 #             print(3)
 
+class ShowHero(pygame.sprite.Sprite):
+    def __init__(self, x, y, hero_type):
+        anim_sheets = load_image('_'.join(['lizard', 'f', 'idle', 'anim.png']))
+        screen.blit(anim_sheets, (0, 0))
+        pygame.display.flip()
+        time.sleep(3)
+
+        super().__init__(4, 1, 0, 0, anim_sheets)
+        self.anim_timer = 0
+
+    def update(self):
+        self.anim_timer += 1 / FPS
+        if self.anim_timer >= 0.1:
+            self.cur_frame = (self.cur_frame + 1) % 4
+            self.anim_timer = 0
+        self.image = self.frames[self.cur_frame]
+
 
 class Hero(AnimatedSprite):
     # классы определяются статами
@@ -297,7 +314,7 @@ class Hero(AnimatedSprite):
 
 borders = pygame.sprite.Group()
 decorations = pygame.sprite.Group()
-cursor = load_image('cursor.png', -1)
+cursor = pygame.transform.scale(load_image('cursor.jpg', -1), (60, 60))
 
 
 class Border(pygame.sprite.Sprite):
@@ -340,6 +357,39 @@ running = False
 pick_up = False
 
 
+def hero_choose():
+    heros = ['knight', 'wizzard', 'lizard']
+    cur_hero = 0
+    while True:
+        hero_image = ShowHero(1, 1, 'lizard')
+
+        image = load_image('next_button.png', -1)
+        next_btn = image.get_rect().move(width // 2 + 300, height // 2)
+        screen.blit(image, (width // 2 + 300, height // 2))
+
+        image = load_image('prev_button.png', -1)
+        prev_btn = image.get_rect().move(width // 2 - 300, height // 2)
+        screen.blit(image, (width // 2 - 300, height // 2))
+
+        screen.blit(hero_image.image, (width // 2 - 300, height // 2))
+
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
+        pygame.display.flip()
+        clock.tick(FPS)
+
+        screen.fill((0, 0, 0))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos  # gets mouse position
+                if next_btn.collidepoint(mouse_pos):
+                    cur_hero = (cur_hero + 1) % 3
+                elif prev_btn.collidepoint(mouse_pos):
+                    cur_hero = abs((cur_hero - 1)) % 3
+
+
 def pause():  # функция главного меню и паузы
     while True:
         bottom_layer.draw(screen)
@@ -355,7 +405,7 @@ def pause():  # функция главного меню и паузы
         image = load_image('play_button.png', -1)
         resume_btn = image.get_rect().move(150, 190)
         screen.blit(image, (150, 190))
-        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 26, pygame.mouse.get_pos()[1] - 26))
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
         pygame.display.flip()
         screen.fill((0, 0, 0))
         for event in pygame.event.get():
@@ -374,18 +424,22 @@ def menu():  # функция главного меню и паузы
     while True:
         screen.blit(fon, (0, 0))
         image = load_image('exit_button.png', -1)
-        exit_btn = image.get_rect().move(100, 100)
-        screen.blit(image, (100, 100))
+        exit_btn = image.get_rect().move(width - 300, 100)
+        screen.blit(image, (width - 300, 100))
 
         image = load_image('play_button.png', -1)
-        resume_btn = image.get_rect().move(100, 200)
-        screen.blit(image, (100, 200))
+        resume_btn = image.get_rect().move(width - 300, 200)
+        screen.blit(image, (width - 300, 200))
 
         image = load_image('full_disp.png', -1)
-        full_disp_btn = image.get_rect().move(100, 300)
-        screen.blit(image, (100, 300))
+        full_disp_btn = image.get_rect().move(width - 300, 300)
+        screen.blit(image, (width - 300, 300))
 
-        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 26, pygame.mouse.get_pos()[1] - 26))
+        image = load_image('choose_button.png', -1)
+        choose_btn = image.get_rect().move(width - 300, 400)
+        screen.blit(image, (width - 300, 400))
+
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
         pygame.display.flip()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -402,10 +456,13 @@ def menu():  # функция главного меню и паузы
                         return 'Not_full'
                     else:
                         return 'Full'
+                elif choose_btn.collidepoint(mouse_pos):
+                    return 'Choose'
+
+
 pygame.mouse.set_visible(False)  # делаем курсор невидимым
 
 while main_menu:
-    # screen.fill((0, 0, 0))
     fon = pygame.transform.scale(load_image('menu_background.jpg'), size)
     screen.blit(fon, (0, 0))
 
@@ -417,11 +474,14 @@ while main_menu:
     elif action == 'Full':
         fullscreen_size, size = size, fullscreen_size
         fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
-        screen = pygame.display.set_mode(size, pygame.NOFRAME | pygame.FULLSCREEN)
+        screen = pygame.display.set_mode((width, height), pygame.NOFRAME | pygame.FULLSCREEN)
+
     elif action == 'Not_full':
         fullscreen_size, size = size, fullscreen_size
         fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
         screen = pygame.display.set_mode(size, pygame.NOFRAME)
+    elif action == 'Choose':
+        action = hero_choose()
 
     cur_level = 0  # текущий уровень в последовательности
     all_sprites = pygame.sprite.Group()  # группа для обновления
@@ -432,7 +492,6 @@ while main_menu:
     level = load_level(f'level_{level_seq[cur_level]}.txt')
     for i in level:
         print(*i)
-
 
     hero = Hero('lizard', 'f', 0, 0)
     generate_level(level, hero)
@@ -485,8 +544,6 @@ while main_menu:
                 pick[0].picked(hero)
         all_sprites.update()
         # рисуем свой курсор
-        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 26, pygame.mouse.get_pos()[1] - 26))
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
         pygame.display.flip()
         clock.tick(FPS)
-
-
