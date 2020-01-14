@@ -358,6 +358,7 @@ class ShowHero(AnimatedSprite):
 
 def hero_choose():
     heroes = ['knight', 'wizzard', 'lizard']
+    types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
     cur_hero = 0
     sex = 'm'
     hero_image = ShowHero(1, 1, heroes[cur_hero], sex)
@@ -385,6 +386,25 @@ def hero_choose():
         image = load_image('prev_button.png', -1)
         prev_btn = image.get_rect().move(width // 2 - 300, height // 2)
         screen.blit(image, (width // 2 - 300, height // 2))
+
+        characteristic = ['Количество жизней: {}'.format(types[heroes[cur_hero]][0]),
+                          'Количество маны: {}'.format(types[heroes[cur_hero]][1]),
+                          'Урон: {}'.format(types[heroes[cur_hero]][2]),
+                          'Скорость бега: {}'.format(types[heroes[cur_hero]][3])]
+        text_w = 0
+        text_h = 0
+        text_x = 0
+        text_y = 0
+        for i in range(len(characteristic)):
+            font = pygame.font.Font(None, 50)
+            text = font.render(characteristic[i], 1, (100, 255, 100))
+            text_x = width // 2 - 150
+            text_y = height // 2 - text.get_height() // 2 - 300 + text.get_height() * i
+            text_w = max(text.get_width(), text_w)
+            text_h += text.get_height()
+            screen.blit(text, (text_x, text_y))
+        pygame.draw.rect(screen, (0, 255, 0), (width // 2 - 160, text_y - text.get_height() * i - 10,
+                                               text_w + 20, text_h + 20), 1)
 
         screen.blit(pygame.transform.scale(hero_image.image, (160, 280)), (width // 2 - 60, height // 2 - 200))
 
@@ -517,7 +537,6 @@ while main_menu:
         if action:
             hero_creature, hero_sex = action
 
-
     cur_level = 0  # текущий уровень в последовательности
     all_sprites = pygame.sprite.Group()  # группа для обновления
     items = pygame.sprite.Group()  # все предметы
@@ -575,8 +594,9 @@ while main_menu:
             pick[0].highlight()
             if pick_up:
                 pick[0].picked(hero)
-        all_sprites.update()
+
         # рисуем свой курсор
         screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
         pygame.display.flip()
         clock.tick(FPS)
+        all_sprites.update()
