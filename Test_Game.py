@@ -32,7 +32,7 @@ FPS = 30
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
-size = width, height = 1000, 1000
+size = width, height = 1000, 700
 screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
 items = pygame.sprite.Group()  # все предметы
@@ -94,6 +94,13 @@ def highlight(rect, title, *stats):
     pygame.draw.polygon(screen, (255, 255, 255), ((rect.x + rect.w // 2, rect.y),
                                                   (rect.x + rect.w // 2 - 15, rect.y - 15),
                                                   (rect.x + rect.w // 2 + 15, rect.y - 15)))
+    if stats:
+        rect = Weapon.stat_bar.get_rect()
+        screen.blit(Weapon.stat_bar, (width // 2 - rect.w // 2, height - rect.h))
+        for i, stat in enumerate(stats):
+            text = font.render(str(stat), 1, (255, 255, 255))
+            screen.blit(text, (width // 2 - rect.w // 2 + rect.w // 3 * (i + 0.5) + text.get_rect().w // 2,
+                               height - rect.h // 2 - text.get_rect().h // 2))
 
 
 class AnimatedSprite(pygame.sprite.Sprite):  # база для анимированных спрайтов, режет листы анимаций
@@ -230,6 +237,8 @@ class Weapon(AnimatedSprite):
         for line in reader:
             types[line['name']] = line
 
+    stat_bar = load_image('stat_bar.png')
+
     def __init__(self, name, x, y):
         self.name = name
         stats = Weapon.types[name]
@@ -280,7 +289,7 @@ class Weapon(AnimatedSprite):
         self.picked_hero = hero
 
     def highlight(self):
-        highlight(self.rect, self.name, self.mana_cost, self.dmg)
+        highlight(self.rect, self.name, self.dmg, self.mana_cost, self.shoot_freq)
 
     def shoot(self):
         if self.cooldown <= 0:
@@ -335,6 +344,7 @@ class Hero(AnimatedSprite):
     # классы определяются статами
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
     stat_bar = load_image("hero_bar.png", -1)
+
 
     def __init__(self, hero_type, sex, pos_x, pos_y):
         self.health, self.mana, self.dmg, self.speed = Hero.types[hero_type]
