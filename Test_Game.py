@@ -1,7 +1,6 @@
 import os
 import sys
 import math
-import random
 import csv
 
 import pygame
@@ -33,7 +32,7 @@ FPS = 30
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 cur_level = 0  # текущий уровень в последовательности
-size = width, height = 600, 600
+size = width, height = 1000, 1000
 screen = pygame.display.set_mode(size)
 all_sprites = pygame.sprite.Group()  # группа для обновления
 items = pygame.sprite.Group()  # все предметы
@@ -73,6 +72,7 @@ def generate_level(level, hero):  # прогрузка уровня
     borders.empty()
     top_layer.empty()
     bottom_layer.empty()
+    obstacles.empty()
     for y in range(len(level)):
         for x in range(len(level[y])):
             Floor(x, y)
@@ -193,23 +193,33 @@ class Potion(AnimatedSprite):  # любое зелье
 
 
 class Bullet(AnimatedSprite):
-    def __init__(self, x, y, direction, bullet_type=''):
-        super().__init__(1, 1, x, y, load_image('weapons/bullet' + bullet_type + '.png'))
+    types = {'bullet': {'a': 0, 'speed': 50, 'image': 'bullet3.png', 'frames': 1, 'explosion': '1'},
+             'missile': {'a': 15, 'speed': 10, 'image': 'missle.png', 'frames': 8, 'explosion': '4'}}
+
+    def __init__(self, x, y, direction, damage, bullet_type='bullet'):
+        self.damage = damage
+        self.type = bullet_type
+        self.direction = direction
+        stats = Bullet.types[bullet_type]
+        super().__init__(stats['frames'], 1, x, y, load_image('weapons/' + stats['image']))
         self.rect.center = (x, y)
         for i, frame in enumerate(self.frames):
             self.frames[i] = pygame.transform.rotate(frame, math.degrees(direction))
         self.image = self.frames[self.cur_frame]
         self.add(player)
-        self.speed = 30
-        self.speed_y = -math.sin(direction) * self.speed
-        self.speed_x = math.cos(direction) * self.speed
+        self.speed_y = -math.sin(direction) * stats['speed']
+        self.speed_x = math.cos(direction) * stats['speed']
 
     def update(self):
-        self.cur_frame = (self.cur_frame + 1) % self.frame_lim
+        self.cur_frame = min(self.cur_frame + 1, self.frame_lim - 1)
         self.image = self.frames[self.cur_frame]
+        self.speed_x += Bullet.types[self.type]['a'] * math.cos(self.direction) / FPS
+        self.speed_y -= Bullet.types[self.type]['a'] * math.sin(self.direction) / FPS
         self.rect = self.rect.move(self.speed_x, self.speed_y)
-        if pygame.sprite.spritecollideany(self, borders, pygame.sprite.collide_mask):
-            Explosion(self.rect.centerx, self.rect.centery)
+        if pygame.sprite.spritecollideany(self, obstacles, pygame.sprite.collide_mask):
+            Explosion(self.rect.centerx, self.rect.centery, Bullet.types[self.type]['explosion'])
+            self.kill()
+        elif pygame.sprite.spritecollide(self, all_sprites, 0)[0] == self:
             self.kill()
 
 
@@ -218,7 +228,6 @@ class Weapon(AnimatedSprite):
     with open('data/weapons/weapons_ref.csv') as ref:
         reader = csv.DictReader(ref)
         for line in reader:
-            print(reader.fieldnames)
             types[line['name']] = line
 
     def __init__(self, name, x, y):
@@ -229,7 +238,16 @@ class Weapon(AnimatedSprite):
         self.shoot_freq = float(stats['shots_per_second'])
         self.align_k = float(stats['align'])
         self.anim_length = float(stats['animation'])
+        self.bullet_type = stats['bullet']
+        shoot_x, shoot_y = [int(i) for i in stats['shoot_point'].split(';')]
         super().__init__(int(stats['frames']), 1, x, y, load_image('weapons/' + stats['image']))
+        self.rect.w *= self.align_k
+        shoot_x += self.rect.w // 2
+        shoot_y -= self.rect.h // 2
+        self.shoot_radius = (shoot_x ** 2 + shoot_y ** 2) ** 0.5
+        self.shoot_angle = (math.atan(shoot_y / shoot_x))
+        # print(self.rect.w, self.rect.h)
+        # print(self.shoot_angle, self.shoot_freq)
         self.add(items)
         self.angle = None
         self.shooting = False
@@ -245,8 +263,18 @@ class Weapon(AnimatedSprite):
         self.rect.centerx = rect.centerx
         self.rect.centery = rect.centery + rect.h // 2.5
 
+    def drop(self, pos):
+        self.remove(player)
+        self.add(items)
+        self.picked_hero.weapons.remove(self)
+        self.set_pos(*pos)
+        self.picked_hero = None
+
     def picked(self, hero):
-        hero.weapons.append(self)
+        hero.weapons.insert(0, self)
+        if len(hero.weapons) > hero.inventory_size:
+            hero.weapons[1].drop(hero.get_pos())
+
         items.remove(self)
         player.add(self)
         self.picked_hero = hero
@@ -258,10 +286,15 @@ class Weapon(AnimatedSprite):
         if self.cooldown <= 0:
 
             print(math.degrees(self.angle))
-            base_rect = self.frames[0].get_rect()
-            x = self.rect.centerx + math.cos(self.angle) * base_rect.w / 2 # + math.cos(90 + self.angle) * base_rect.h / 2
-            y = self.rect.centery - math.sin(self.angle) * base_rect.w / 2 # - math.sin(90 + self.angle) * base_rect.h / 2
-            Bullet(x, y, self.angle)
+            y = self.rect.centery - self.shoot_radius * math.sin(self.shoot_angle + self.angle)
+            if not self.picked_hero.direction:
+                x = self.rect.centerx + self.shoot_radius * math.cos(self.shoot_angle + self.angle)
+
+            else:
+                x = self.rect.centerx - self.shoot_radius * math.cos(self.shoot_angle + self.angle)
+                self.angle = math.pi - self.angle
+
+            Bullet(x, y, self.angle, self.dmg + self.picked_hero.get_dmg(), self.bullet_type)
             self.shooting = True
             self.cooldown = 1 / self.shoot_freq
 
@@ -277,22 +310,25 @@ class Weapon(AnimatedSprite):
         self.cooldown -= 1 / FPS
         self.image = self.frames[self.cur_frame]
         if self.picked_hero:
-            new_image = pygame.Surface((int(self.image.get_rect().w * self.align_k),
-                                        self.image.get_rect().h), pygame.SRCALPHA, 32)
-            new_image.blit(self.image, (new_image.get_rect().w - self.image.get_rect().w, 0))
-            self.image = new_image
-            m_x, m_y = pygame.mouse.get_pos()
-            angle = math.atan((hero.rect.y + hero.rect.h / 2 - m_y) /
-                              (abs(hero.rect.x + hero.rect.w / 2 - m_x) + 1))
-            old_rect = self.rect
-            self.image = pygame.transform.rotate(self.image, math.degrees(angle))
-            self.image = pygame.transform.flip(self.image, hero.direction, 0)
-            self.rect = self.image.get_rect()
-            self.rect.center = old_rect.center
-            pygame.draw.rect(screen, (0, 0, 0), self.rect, 2)
-            self.angle = angle
-            if self.picked_hero.direction:
-                self.angle = math.pi - self.angle
+            if self is self.picked_hero.get_current_weapon():
+                new_image = pygame.Surface((int(self.image.get_rect().w * self.align_k),
+                                            self.image.get_rect().h), pygame.SRCALPHA, 32)
+                new_image.blit(self.image, (new_image.get_rect().w - self.image.get_rect().w, 0))
+                self.image = new_image
+                m_x, m_y = pygame.mouse.get_pos()
+                angle = math.atan((hero.rect.y + hero.rect.h / 2 - m_y) /
+                                  (abs(hero.rect.x + hero.rect.w / 2 - m_x) + 1))
+                old_rect = self.rect
+                self.image = pygame.transform.rotate(self.image, math.degrees(angle))
+                self.image = pygame.transform.flip(self.image, hero.direction, 0)
+                self.rect = self.image.get_rect()
+                self.rect.center = old_rect.center
+                # pygame.draw.rect(screen, (0, 0, 0), self.rect, 2)
+                self.angle = angle
+                # if self.picked_hero.direction:
+                #     self.angle = math.pi - self.angle
+            else:
+                self.image = pygame.Surface((0, 0), pygame.SRCALPHA, 32)
 
 
 class Hero(AnimatedSprite):
@@ -317,7 +353,7 @@ class Hero(AnimatedSprite):
         self.mask = pygame.mask.from_surface(mask_surface)
         self.buffs = []
         self.weapons = []
-        self.cur_weapon = 0
+        self.inventory_size = 2
         self.direction = False
         self.is_running = False
         self.anim_timer = 0
@@ -337,9 +373,13 @@ class Hero(AnimatedSprite):
     def get_speed(self):
         return self.speed + sum([buff[1] for buff in self.buffs])
 
-    def next_weapon(self):
+    def get_current_weapon(self):
         if self.weapons:
-            self.cur_weapon = (self.cur_weapon + 1) % len(self.weapons)
+            return self.weapons[0]
+
+    def next_weapon(self):
+        if len(self.weapons) > 1:
+            self.weapons.insert(0, self.weapons.pop())
 
     def heal(self, hp):
         self.health = min(self.health + hp, self.max_health)
@@ -355,7 +395,7 @@ class Hero(AnimatedSprite):
 
     def shoot(self):
         if self.weapons:
-            weapon = self.weapons[self.cur_weapon]
+            weapon = self.get_current_weapon()
             if self.get_mana() >= weapon.mana_cost:
                 self.mana -= weapon.mana_cost
                 weapon.shoot()
@@ -404,7 +444,7 @@ class Hero(AnimatedSprite):
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
         if self.weapons:
-            self.weapons[self.cur_weapon].align(self.rect)
+            self.get_current_weapon().align(self.rect)
 
         font = pygame.font.Font(None, 30)
         health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
@@ -423,11 +463,12 @@ class Hero(AnimatedSprite):
 
 borders = pygame.sprite.Group()
 decorations = pygame.sprite.Group()
+obstacles = pygame.sprite.Group()
 
 
 class Border(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
-        super().__init__(all_sprites, borders, bottom_layer)
+        super().__init__(all_sprites, borders, bottom_layer, obstacles)
         self.image = load_image("Wall.jpg")
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
@@ -436,14 +477,14 @@ class Border(pygame.sprite.Sprite):
 
 class TopWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
-        super().__init__(all_sprites, decorations, top_layer)
+        super().__init__(all_sprites, decorations, top_layer, obstacles)
         self.image = load_image("wall_top.jpg")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y - 20)
 
 
 class BottomWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
-        super().__init__(all_sprites, decorations, bottom_layer)
+        super().__init__(all_sprites, decorations, bottom_layer, obstacles)
         self.image = load_image("wall_bottom.png")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y + 20)
 
