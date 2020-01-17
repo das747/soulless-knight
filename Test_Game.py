@@ -4,6 +4,7 @@ import sys
 import pygame
 
 pygame.init()
+pygame.display.set_mode((0, 0))
 
 
 class Camera:
@@ -24,13 +25,19 @@ class Camera:
 
 
 camera = Camera()
+all_sprites = pygame.sprite.Group()
 
 tile_width = tile_height = 40
 FPS = 60
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
-size = width, height = 1200, 1000
-screen = pygame.display.set_mode(size)
+# размеры экрана
+fullscreen_size = fullscreen_width, fullscreen_height = pygame.display.get_window_size()
+size = width, height = 1300, 700
+
+for i in list(os.environ):
+    print(i)
+screen = pygame.display.set_mode(size, pygame.NOFRAME)
 
 
 def load_level(filename):  # загрузка уровня из текстового файла
@@ -248,6 +255,7 @@ class Hero(AnimatedSprite):
 
 borders = pygame.sprite.Group()
 decorations = pygame.sprite.Group()
+cursor = pygame.transform.scale(load_image('cursor.jpg', -1), (60, 60))
 
 
 class Border(pygame.sprite.Sprite):
@@ -289,17 +297,123 @@ main_menu = True
 running = False
 pick_up = False
 
-def pause():  # функция главного меню и паузы
-    image = load_image('exit_button.png', -1)
-    exit_btn = image.get_rect().move(100, 100)
-    screen.blit(image, (100, 100))
 
-    image = load_image('play_button.png', -1)
-    resume_btn = image.get_rect().move(100, 200)
-    screen.blit(image, (100, 200))
+class ShowHero(AnimatedSprite):
+    def __init__(self, x, y, hero_type, sex):
+        anim_sheets = load_image('_'.join([hero_type, sex, 'idle', 'anim.png']))
+        super().__init__(4, 1, 0, 0, anim_sheets)
+        self.anim_timer = 0
 
-    pygame.display.flip()
+    def update(self):
+        self.anim_timer += 1 / FPS
+
+        if self.anim_timer >= 0.1:
+            self.cur_frame = (self.cur_frame + 1) % self.frame_lim
+            self.anim_timer = 0
+        self.image = self.frames[self.cur_frame]
+
+
+def hero_choose():
+    heroes = ['knight', 'wizzard', 'lizard']
+    types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
+    cur_hero = 0
+    sex = 'm'
+    hero_image = ShowHero(1, 1, heroes[cur_hero], sex)
     while True:
+        image = load_image('next_button.png', -1)
+        next_btn = image.get_rect().move(width // 2 + 300, height // 2)
+        screen.blit(image, (width // 2 + 300, height // 2))
+
+        image = load_image('back_button.png', -1)
+        back_btn = image.get_rect().move(0, 0)
+        screen.blit(image, (0, 0))
+
+        image = load_image('woman_button.png', -1)
+        woman_btn = image.get_rect().move(width // 2 - 180, height // 2 + 100)
+        screen.blit(image, (width // 2 - 180, height // 2 + 100))
+
+        image = load_image('man_button.png', -1)
+        man_btn = image.get_rect().move(width // 2 + 50, height // 2 + 100)
+        screen.blit(image, (width // 2 + 50, height // 2 + 100))
+
+        image = load_image('choose_button.png', -1)
+        choose_btn = image.get_rect().move(width // 2 - 75, height // 2 + 200)
+        screen.blit(image, (width // 2 - 75, height // 2 + 200))
+
+        image = load_image('prev_button.png', -1)
+        prev_btn = image.get_rect().move(width // 2 - 300, height // 2)
+        screen.blit(image, (width // 2 - 300, height // 2))
+
+        characteristic = ['Количество жизней: {}'.format(types[heroes[cur_hero]][0]),
+                          'Количество маны: {}'.format(types[heroes[cur_hero]][1]),
+                          'Урон: {}'.format(types[heroes[cur_hero]][2]),
+                          'Скорость бега: {}'.format(types[heroes[cur_hero]][3])]
+        text_w = 0
+        text_h = 0
+        text_x = 0
+        text_y = 0
+        for i in range(len(characteristic)):
+            font = pygame.font.Font(None, 50)
+            text = font.render(characteristic[i], 1, (100, 255, 100))
+            text_x = width // 2 - 150
+            text_y = height // 2 - text.get_height() // 2 - 300 + text.get_height() * i
+            text_w = max(text.get_width(), text_w)
+            text_h += text.get_height()
+            screen.blit(text, (text_x, text_y))
+        pygame.draw.rect(screen, (0, 255, 0), (width // 2 - 160, text_y - text.get_height() * i - 10,
+                                               text_w + 20, text_h + 20), 1)
+
+        screen.blit(pygame.transform.scale(hero_image.image, (160, 280)), (width // 2 - 60, height // 2 - 200))
+
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
+        hero_image.update()
+        pygame.display.flip()
+        screen.fill((0, 0, 0))
+        clock.tick(FPS)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos  # gets mouse position
+                if next_btn.collidepoint(mouse_pos):
+                    cur_hero = (cur_hero + 1) % 3
+                    hero_image = ShowHero(1, 1, heroes[cur_hero], sex)
+                elif prev_btn.collidepoint(mouse_pos):
+                    cur_hero = (cur_hero - 1) % 3
+                    print(cur_hero)
+                    hero_image = ShowHero(1, 1, heroes[cur_hero], sex)
+                elif back_btn.collidepoint(mouse_pos):
+                    return 0
+                elif choose_btn.collidepoint(mouse_pos):
+                    return heroes[cur_hero], sex
+                elif man_btn.collidepoint(mouse_pos):
+                    sex = 'm'
+                    hero_image = ShowHero(1, 1, heroes[cur_hero], sex)
+                elif woman_btn.collidepoint(mouse_pos):
+                    sex = 'f'
+                    hero_image = ShowHero(1, 1, heroes[cur_hero], sex)
+
+
+def pause():  # функция главного меню и паузы
+    while True:
+        bottom_layer.draw(screen)
+        items.draw(screen)
+        player.draw(screen)
+        top_layer.draw(screen)
+        image = load_image('pause_menu.png', -1)
+        screen.blit(image, (100, 100))
+        image = load_image('exit_button.png', -1)
+        exit_btn = image.get_rect().move(400, 190)
+        screen.blit(image, (400, 190))
+
+        image = load_image('play_button.png', -1)
+        resume_btn = image.get_rect().move(150, 190)
+        screen.blit(image, (150, 190))
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
+        pygame.display.flip()
+        screen.fill((0, 0, 0))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
@@ -312,19 +426,85 @@ def pause():  # функция главного меню и паузы
                     return 'Exit'
 
 
+def menu():  # функция главного меню и паузы
+    while True:
+        screen.blit(fon, (0, 0))
+        image = load_image('exit_button.png', -1)
+        exit_btn = image.get_rect().move(width - 300, 100)
+        screen.blit(image, (width - 300, 100))
+
+        image = load_image('play_button.png', -1)
+        resume_btn = image.get_rect().move(width - 300, 200)
+        screen.blit(image, (width - 300, 200))
+
+        image = load_image('full_disp.png', -1)
+        full_disp_btn = image.get_rect().move(width - 300, 300)
+        screen.blit(image, (width - 300, 300))
+
+        image = load_image('choose_button.png', -1)
+        choose_btn = image.get_rect().move(width - 300, 400)
+        screen.blit(image, (width - 300, 400))
+
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
+        pygame.display.flip()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos  # gets mouse position
+                if resume_btn.collidepoint(mouse_pos):
+                    return 'Play'
+                elif exit_btn.collidepoint(mouse_pos):
+                    return 'Exit'
+                elif full_disp_btn.collidepoint(mouse_pos):
+                    if size == (fullscreen_width, fullscreen_height):
+                        return 'Not_full'
+                    else:
+                        return 'Full'
+                elif choose_btn.collidepoint(mouse_pos):
+                    return 'Choose'
+
+
+hero = Hero('lizard', 'f', 0, 0)
+pygame.mouse.set_visible(False)  # делаем курсор невидимым
+hero_creature, hero_sex = 'lizard', 'f'
 while main_menu:
+
+    fon = pygame.transform.scale(load_image('back.jpg'), size)
+    screen.blit(fon, (0, 0))
+
+    action = menu()
+    if action == 'Play':  # проверяем нажата ли кнопка начала игры, если да, то запускаем
+        running = True
+    elif action == 'Exit':
+        terminate()
+    elif action == 'Full':
+        fullscreen_size, size = size, fullscreen_size
+        fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
+        screen = pygame.display.set_mode(size, pygame.NOFRAME | pygame.FULLSCREEN)
+
+    elif action == 'Not_full':
+        fullscreen_size, size = size, fullscreen_size
+        fullscreen_width, fullscreen_height, width, height = width, height, fullscreen_width, fullscreen_height
+        screen = pygame.display.set_mode(size, pygame.NOFRAME)
+    elif action == 'Choose':
+        action = hero_choose()
+        print(action)
+        if action:
+            hero_creature, hero_sex = action
+
     cur_level = 0  # текущий уровень в последовательности
     all_sprites = pygame.sprite.Group()  # группа для обновления
     items = pygame.sprite.Group()  # все предметы
     top_layer = pygame.sprite.Group()  # группа для отрисовки всего что над персонажем
-    bottom_layer = pygame.sprite.Group()  # группа для отриосвки всего что под персонажем
+    bottom_layer = pygame.sprite.Group()  # группа для отрисoвки всего что под персонажем
 
     level = load_level(f'level_{level_seq[cur_level]}.txt')
     for i in level:
         print(*i)
-    # pygame.mouse.set_visible(False)  # делаем курсор невидимым
-    cursor = load_image('cursor.png', -1)
-    hero = Hero('lizard', 'f', 0, 0)
+
+    hero = Hero(hero_creature, hero_sex, 0, 0)
     generate_level(level, hero)
     player = pygame.sprite.Group(hero)
 
@@ -341,12 +521,7 @@ while main_menu:
         if event.type == pygame.QUIT:
             terminate()
 
-    screen.fill((0, 0, 0))
-    action = pause()
-    if action == 'Play':  # проверяем нажата ли кнопка начала игры, если да, то запускаем
-        running = True
-    elif action == 'Exit':
-        terminate()
+    pygame.display.flip()
 
     while running:
         pick_up = False
@@ -372,7 +547,11 @@ while main_menu:
         items.draw(screen)
         player.draw(screen)
         top_layer.draw(screen)
+
+        # рисуем свой курсор
+        screen.blit(cursor, (pygame.mouse.get_pos()[0] - 30, pygame.mouse.get_pos()[1] - 30))
         pygame.display.flip()
         all_sprites.update()
         clock.tick(FPS)
+        all_sprites.update()
 
