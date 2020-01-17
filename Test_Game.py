@@ -103,6 +103,21 @@ def highlight(rect, title, *stats):
                                height - rect.h // 2 - text.get_rect().h // 2))
 
 
+def draw_HUD(hero):
+    font = pygame.font.Font(None, 30)
+    health = font.render(str(hero.get_health()) + '/' + str(hero.max_health), 1, (255, 255, 255))
+    mana = font.render(str(hero.get_mana()) + '/' + str(hero.max_mana), 1, (255, 255, 255))
+    screen.blit(Hero.stat_bar, (0, 0))
+    if hero.get_health():
+        pygame.draw.rect(screen, (255, 64, 69),
+                         (54, 18, int(175 / (hero.max_health / hero.get_health())), 18), 0)
+    if hero.get_mana():
+        pygame.draw.rect(screen, (72, 114, 164),
+                         (54, 49, int(175 / (hero.max_mana / hero.get_mana())), 18), 0)
+    screen.blit(health, (120, 18))
+    screen.blit(mana, (100, 49))
+
+
 class AnimatedSprite(pygame.sprite.Sprite):  # база для анимированных спрайтов, режет листы анимаций
     def __init__(self, columns, rows, x, y, *sheets):
         super().__init__(all_sprites)
@@ -446,28 +461,17 @@ class Hero(AnimatedSprite):
         self.rect.h = self.image.get_rect().h
         self.rect.w = self.image.get_rect().w
         # self.mask = pygame.mask.from_surface(self.image)
-        self.anim_timer += (1 / FPS)
         for buff in self.buffs:
             buff[-1] -= 1 / FPS
         self.buffs = list(filter(lambda b: b[-1] > 0, self.buffs))
+        
+        self.anim_timer += (1 / FPS)
         if self.anim_timer > 1 / self.get_speed():
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
+            
         if self.weapons:
             self.get_current_weapon().align(self.rect)
-
-        font = pygame.font.Font(None, 30)
-        health = font.render(str(self.get_health()) + '/' + str(self.max_health), 1, (255, 255, 255))
-        mana = font.render(str(self.get_mana()) + '/' + str(self.max_mana), 1, (255, 255, 255))
-        screen.blit(Hero.stat_bar, (0, 0))
-        if self.get_health():
-            pygame.draw.rect(screen, (255, 64, 69),
-                             (54, 18, int(175 / (self.max_health / self.get_health())), 18), 0)
-        if self.get_mana():
-            pygame.draw.rect(screen, (72, 114, 164),
-                             (54, 49, int(175 / (self.max_mana / self.get_mana())), 18), 0)
-        screen.blit(health, (120, 18))
-        screen.blit(mana, (100, 49))
         # pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
 
 
@@ -559,11 +563,12 @@ while running:
     items.draw(screen)
     player.draw(screen)
     top_layer.draw(screen)
+    draw_HUD(hero)
     pick = pygame.sprite.spritecollide(hero, items, 0, pygame.sprite.collide_mask)
     if pick:
         pick[0].highlight()
         if pick_up:
             pick[0].picked(hero)
-    all_sprites.update()
     pygame.display.flip()
+    all_sprites.update()
     clock.tick(FPS)
