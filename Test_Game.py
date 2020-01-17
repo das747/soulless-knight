@@ -6,10 +6,7 @@ import pygame
 import time
 
 pygame.init()
-
-import tkinter as tk
-
-root = tk.Tk()
+pygame.display.set_mode((0, 0))
 
 
 class Camera:
@@ -38,8 +35,8 @@ FPS = 60
 clock = pygame.time.Clock()
 level_seq = ('1', '2')  # последоваельность смены уровней
 # размеры экрана
-fullscreen_size = fullscreen_width, fullscreen_height = root.winfo_screenwidth(), root.winfo_screenheight()
-size = width, height = 1600, 900
+fullscreen_size = fullscreen_width, fullscreen_height = pygame.display.get_window_size()
+size = width, height = 1300, 700
 
 # pos_x = fullscreen_width / 2 - width / 2
 # pos_y = fullscreen_height / 2 - height / 2
@@ -501,7 +498,7 @@ def menu():  # функция главного меню и паузы
                 elif exit_btn.collidepoint(mouse_pos):
                     return 'Exit'
                 elif full_disp_btn.collidepoint(mouse_pos):
-                    if size == (root.winfo_screenwidth(), root.winfo_screenheight()):
+                    if size == (fullscreen_width, fullscreen_height):
                         return 'Not_full'
                     else:
                         return 'Full'
