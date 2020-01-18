@@ -31,7 +31,7 @@ camera = Camera()
 tile_width = tile_height = 40
 FPS = 60
 clock = pygame.time.Clock()
-level_seq = ('1', '2')  # последоваельность смены уровней
+level_seq = ('1', '3')  # последоваельность смены уровней
 
 # размеры экрана
 FULL_SIZE = FULL_WIDTH, FULL_HEIGHT = pygame.display.get_window_size()
@@ -238,11 +238,14 @@ class Bullet(AnimatedSprite):
         self.speed_x += Bullet.types[self.type]['a'] * math.cos(self.direction) / FPS
         self.speed_y -= Bullet.types[self.type]['a'] * math.sin(self.direction) / FPS
         self.rect = self.rect.move(self.speed_x, self.speed_y)
-        if pygame.sprite.spritecollideany(self, obstacles, pygame.sprite.collide_mask):
-            Explosion(self.rect.centerx, self.rect.centery, Bullet.types[self.type]['explosion'])
+        collision = pygame.sprite.spritecollide(self, all_sprites, 0)
+        obst_collision = pygame.sprite.Group(*[sprite for sprite in collision if obstacles.has(sprite)])
+        if obst_collision.sprites():
+            if pygame.sprite.spritecollideany(self, obst_collision, pygame.sprite.collide_mask):
+                Explosion(self.rect.centerx, self.rect.centery, Bullet.types[self.type]['explosion'])
+                self.kill()
+        elif collision[0] == self:
             self.kill()
-        # elif pygame.sprite.spritecollide(self, all_sprites, 0)[0] == self:
-        #     self.kill()
 
 
 class Weapon(AnimatedSprite):
