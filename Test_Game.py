@@ -129,6 +129,7 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
         self.image = self.frames[self.cur_frame]
         self.rect = self.image.get_rect()
         self.rect = self.rect.move(x, y)
+        self.anim_timer = 0
 
     def cut_sheet(self, sheet, columns, rows):
         self.rect = pygame.Rect(0, 0, sheet.get_width() // columns, sheet.get_height() // rows)
@@ -143,12 +144,11 @@ class Explosion(AnimatedSprite):
     #                 'flame': (6, 5)}
     sheet_format = {'1': (8, 1), '2': (8, 1), '3': (10, 1), '4': (12, 1), '5': (22, 1), '6': (8, 1)}
 
-    def __init__(self,  x, y, shape='1',):
+    def __init__(self, x, y, shape='1'):
         # sheet_name = shape + '_' + color + '.png'
         sheet_name = 'explosion-' + shape + '.png'
         super().__init__(*Explosion.sheet_format[shape], x, y, load_image('effects/' + sheet_name))
         self.rect.center = (x, y)
-        self.anim_timer = 0
         self.add(top_layer)
 
     def update(self):
@@ -166,7 +166,6 @@ class Portal(AnimatedSprite):
     def __init__(self, x, y, portal_type=0):
         self.portal_type = portal_type
         super().__init__(3, 4, x, y, load_image('portal.png'))
-        self.anim_timer = 0
         self.add(items)
 
     def picked(self, hero):
@@ -215,8 +214,8 @@ class Potion(AnimatedSprite):  # любое зелье
 
 
 class Bullet(AnimatedSprite):
-    types = {'bullet': {'a': 0, 'speed': 50, 'image': 'bullet3.png', 'frames': 1, 'explosion': '1'},
-             'missile': {'a': 15, 'speed': 10, 'image': 'missle.png', 'frames': 8, 'explosion': '4'}}
+    types = {'bullet': {'a': 0, 'speed': 300, 'image': 'bullet3.png', 'frames': 1, 'explosion': '1'},
+             'missile': {'a': 400, 'speed': 200, 'image': 'missle.png', 'frames': 8, 'explosion': '4'}}
 
     def __init__(self, x, y, direction, damage, bullet_type='bullet'):
         self.damage = damage
@@ -231,13 +230,19 @@ class Bullet(AnimatedSprite):
         self.add(player)
         self.speed_y = -math.sin(direction) * stats['speed']
         self.speed_x = math.cos(direction) * stats['speed']
+        self.move_x, self.move_y = 0, 0
 
     def update(self):
-        self.cur_frame = min(self.cur_frame + 1, self.frame_lim - 1)
+        self.anim_timer += 1 / FPS
+        if self.anim_timer >= 0.5 / self.frame_lim:
+            self.cur_frame = min(self.cur_frame + 1, self.frame_lim - 1)
+            self.anim_timer = 0
         self.image = self.frames[self.cur_frame]
         self.speed_x += Bullet.types[self.type]['a'] * math.cos(self.direction) / FPS
         self.speed_y -= Bullet.types[self.type]['a'] * math.sin(self.direction) / FPS
-        self.rect = self.rect.move(self.speed_x, self.speed_y)
+        self.rect = self.rect.move(int(self.move_x), int(self.move_y))
+        self.move_x = self.move_x - int(self.move_x) + self.speed_x / FPS
+        self.move_y = self.move_y - int(self.move_y) + self.speed_y / FPS
         collision = pygame.sprite.spritecollide(self, all_sprites, 0)
         obst_collision = pygame.sprite.Group(*[sprite for sprite in collision if obstacles.has(sprite)])
         if obst_collision.sprites():
@@ -279,8 +284,6 @@ class Weapon(AnimatedSprite):
         self.angle = None
         self.shooting = False
         self.picked_hero = None
-        self.anim_timer = 0
-
         self.cooldown = 0
 
     def set_pos(self, x, y):
@@ -361,7 +364,6 @@ class Hero(AnimatedSprite):
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
     stat_bar = load_image("hero_bar.png", -1)
 
-
     def __init__(self, hero_type, sex, pos_x, pos_y):
         self.health, self.mana, self.dmg, self.speed = Hero.types[hero_type]
         self.max_health, self.max_mana = self.health, self.mana
@@ -381,7 +383,6 @@ class Hero(AnimatedSprite):
         self.inventory_size = 2
         self.direction = False
         self.is_running = False
-        self.anim_timer = 0
 
     def get_pos(self):  # потом пригодится
         return self.rect.x + self.rect.w // 2, self.rect.y + self.rect.h // 2
@@ -442,8 +443,8 @@ class Hero(AnimatedSprite):
             y = 1
         if x or y:
             self.is_running = True
-            x = (x * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5) #/ FPS * 10
-            y = (y * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5) #/ FPS * 10
+            x = (x * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5)  # / FPS * 10
+            y = (y * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5)  # / FPS * 10
             self.rect = self.rect.move(x, 0)
             if any([pygame.sprite.collide_mask(self, border) for border in borders]):
                 self.rect = self.rect.move(-x, 0)
@@ -461,7 +462,7 @@ class Hero(AnimatedSprite):
         for buff in self.buffs:
             buff[-1] -= 1 / FPS
         self.buffs = list(filter(lambda b: b[-1] > 0, self.buffs))
-        
+
         self.anim_timer += (1 / FPS)
         if self.anim_timer > 1 / self.get_speed():
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
@@ -470,7 +471,6 @@ class Hero(AnimatedSprite):
         if self.weapons:
             self.get_current_weapon().align(self.rect)
         # pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
-
 
 
 borders = pygame.sprite.Group()
@@ -519,7 +519,6 @@ class ShowHero(AnimatedSprite):
         anim_sheets = load_image('_'.join([hero_type, sex, 'idle', 'anim.png']))
         super().__init__(4, 1, x, y, anim_sheets)
         self.remove(all_sprites)
-        self.anim_timer = 0
 
     def update(self):
         self.anim_timer += 1 / FPS
@@ -606,7 +605,7 @@ def hero_choose():
                     hero_image = ShowHero(0, 0, heroes[cur_hero], sex)
                 elif prev_btn.collidepoint(mouse_pos):
                     cur_hero = (cur_hero - 1) % len(heroes)
-                    hero_image = ShowHero(0, 0,  heroes[cur_hero], sex)
+                    hero_image = ShowHero(0, 0, heroes[cur_hero], sex)
                 elif back_btn.collidepoint(mouse_pos):
                     return 0
                 elif choose_btn.collidepoint(mouse_pos):
@@ -709,7 +708,6 @@ hero_creature, hero_sex = 'lizard', 'f'
 main_menu = True
 running = False
 pick_up = False
-
 
 while main_menu:
     all_sprites = pygame.sprite.Group()  # группа для обновления
