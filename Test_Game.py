@@ -324,7 +324,7 @@ class Weapon(AnimatedSprite):
 
             Bullet(x, y, self.angle, self.dmg + self.picked_hero.get_dmg(), self.bullet_type)
             self.shooting = True
-            self.cooldown = 1 / self.shoot_freq
+            self.cooldown = 1 / self.shoot_freq * self.picked_hero.speed / self.picked_hero.get_speed()
 
     def update(self):
         if self.shooting:
@@ -383,6 +383,7 @@ class Hero(AnimatedSprite):
         self.inventory_size = 2
         self.direction = False
         self.is_running = False
+        self.move_x = self.move_y = 0
 
     def get_pos(self):  # потом пригодится
         return self.rect.x + self.rect.w // 2, self.rect.y + self.rect.h // 2
@@ -433,24 +434,26 @@ class Hero(AnimatedSprite):
             self.direction = True
         else:
             self.direction = False
-        if keys[pygame.K_a]:
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
             x = -1
-        elif keys[pygame.K_d]:
+        elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
             x = 1
-        if keys[pygame.K_w]:
+        if keys[pygame.K_w] or keys[pygame.K_UP]:
             y = -1
-        elif keys[pygame.K_s]:
+        elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
             y = 1
         if x or y:
             self.is_running = True
-            x = (x * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5)  # / FPS * 10
-            y = (y * (self.get_speed() ** 2 / (bool(x) + bool(y))) ** 0.5)  # / FPS * 10
-            self.rect = self.rect.move(x, 0)
-            if any([pygame.sprite.collide_mask(self, border) for border in borders]):
-                self.rect = self.rect.move(-x, 0)
-            self.rect = self.rect.move(0, y)
-            if any([pygame.sprite.collide_mask(self, border) for border in borders]):
-                self.rect = self.rect.move(0, -y)
+            self.move_x += (x * ((self.get_speed() * 40) ** 2 / (bool(x) + bool(y))) ** 0.5) / FPS
+            self.move_y += (y * ((self.get_speed() * 40) ** 2 / (bool(x) + bool(y))) ** 0.5) / FPS
+            self.rect = self.rect.move(int(self.move_x), 0)
+            if pygame.sprite.spritecollideany(self, borders, pygame.sprite.collide_mask):
+                self.rect = self.rect.move(-int(self.move_x), 0)
+            self.move_x -= int(self.move_x)
+            self.rect = self.rect.move(0, self.move_y)
+            if pygame.sprite.spritecollideany(self, borders, pygame.sprite.collide_mask):
+                self.rect = self.rect.move(0, -self.move_y)
+            self.move_y -= int(self.move_y)
         else:
             self.is_running = False
 
