@@ -491,11 +491,54 @@ class Hero(Character):
 
 
 class Enemy(Character):
+    fractions = ('zoombie', 'demon', 'orc')
+
     def __init__(self, x, y, name, stats):
         anim_sheets = (load_image('characters/' + '_'.join([name, 'idle', 'anim.png'])),
                        load_image('characters/' + '_'.join([name, 'run', 'anim.png'])))
         super().__init__(x, y, stats, *anim_sheets)
         self.add(enemies, obstacles)
+
+
+class Rusher(Enemy):
+    """самые маленькие противники, просто бегут на игрока,
+    после столкновения с игроком немного отходят
+    бегают быстрее всех персонажей, только атака столкновением"""
+    def __init__(self, x, y, fraction):
+        super().__init__(x, y, 'tiny_' + fraction, (4, 0, 1, 8))
+
+    def define_movement(self):
+        hero_x, hero_y = hero.get_pos()
+        x = 1 - (not (hero_x - self.rect.centerx > 20)) - (self.rect.centerx - hero_x > 20)
+        y = 1 - (not (hero_y - self.rect.centery > 20)) - (self.rect.centery - hero_y > 20)
+        return x, y
+
+
+class Summoner(Enemy):
+    """маги, умеют кастовать Rusher'ов, стараются держаться на расстоянии от игрока, не преследуют
+    если игрок подходит слишеом близко могут атаковать или телепортироваться"""
+    def __init__(self, x, y, fraction):
+        super().__init__(x, y, 'magic_' + fraction, (8, 0, 4, 6))
+
+
+class Fighter(Enemy):
+    """обычные бойцы, стреляют по кд, держатся на расстоянии, но не отходят далеко """
+    def __init__(self, x, y, fraction):
+        super().__init__(x, y, 'warrior_' + fraction, (8, 0, 4, 5))
+
+
+class Elemental(Enemy):
+    """те же Fighter'ы но со стихийными пулями(демоны - огонь, зомби - заморозка, орки - яд)"""
+    def __init__(self, x, y, fraction):
+        super().__init__(x, y, 'element_' + fraction, (12, 0, 4, 5))
+
+
+class Guard(Enemy):
+    """тяжёлые бойцы, мало двигаются, старются идти к игроку,
+    стреляют масиированно, возможно атака по площади
+    в целом медленные, большой кд"""
+    def __init__(self, x, y, fraction):
+        super().__init__(x, y, 'big_' + fraction, (25, 0, 6, 3))
 
 
 borders = pygame.sprite.Group()
@@ -785,7 +828,9 @@ while main_menu:
     Weapon('Револьвер', 150, 250)
     Weapon('MP40', 150, 280)
     Weapon('Гранатомёт', 150, 300)
-    Enemy(150, 320, 'zombie', (1, 1, 1, 7))
+    Rusher(200, 300, 'zombie')
+    # Rusher(250, 300, 'demon')
+    # Rusher(160, 300, 'orc')
 
     while running:
         pick_up = False
