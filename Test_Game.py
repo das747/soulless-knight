@@ -131,6 +131,12 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
         self.rect = self.rect.move(x, y)
         self.anim_timer = 0
 
+    def get_pos(self):
+        return self.rect.centerx, self.rect.centery
+
+    def set_pos(self, x, y):
+        self.rect.x, self.rect.y = x, y
+
     def cut_sheet(self, sheet, columns, rows):
         self.rect = pygame.Rect(0, 0, sheet.get_width() // columns, sheet.get_height() // rows)
         for j in range(rows):
@@ -286,9 +292,6 @@ class Weapon(AnimatedSprite):
         self.picked_hero = None
         self.cooldown = 0
 
-    def set_pos(self, x, y):
-        self.rect.x, self.rect.y = x, y
-
     def align(self, rect):
         self.rect.centerx = rect.centerx
         self.rect.centery = rect.centery + rect.h // 2.5
@@ -359,35 +362,27 @@ class Weapon(AnimatedSprite):
                 self.image = pygame.Surface((0, 0), pygame.SRCALPHA, 32)
 
 
-class Hero(AnimatedSprite):
-    # классы определяются статами
-    types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
-    stat_bar = load_image("hero_bar.png", -1)
-
-    def __init__(self, hero_type, sex, pos_x, pos_y):
-        self.health, self.mana, self.dmg, self.speed = Hero.types[hero_type]
+class Character(AnimatedSprite):
+    def __init__(self, x, y, stats, *sheets):
+        # инициализируем статы
+        self.health, self.mana, self.dmg, self.speed = stats
         self.max_health, self.max_mana = self.health, self.mana
-        # анимации ожидания и движения
-        anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png'])),
-                       load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
-        # загрузка картинки через название и пол персонажа
-        super().__init__(4, 1, pos_x * tile_width, pos_y * tile_height, *anim_sheets)
+        super().__init__(4, 1, x, y, *sheets)
+        # вычисление маски по максимальной форме
         mask_surface = pygame.Surface((40, 70), pygame.SRCALPHA, 32)
         self.frames = [pygame.transform.scale(frame, (32, 56)) for frame in self.frames]
         for frame in self.frames:
             mask_surface.blit(frame, (0, 0))
             mask_surface.blit(pygame.transform.flip(frame, True, False), (0, 0))
         self.mask = pygame.mask.from_surface(mask_surface)
-        self.buffs = []
-        self.weapons = []
-        self.inventory_size = 2
+        # вспомогательные атрибуты
         self.direction = False
         self.is_running = False
         self.move_x = self.move_y = 0
+        self.buffs = []
+        self.weapons = []
 
-    def get_pos(self):  # потом пригодится
-        return self.rect.x + self.rect.w // 2, self.rect.y + self.rect.h // 2
-
+    # методы для измерения характеристик
     def get_health(self):
         return self.health
 
@@ -404,10 +399,7 @@ class Hero(AnimatedSprite):
         if self.weapons:
             return self.weapons[0]
 
-    def next_weapon(self):
-        if len(self.weapons) > 1:
-            self.weapons.insert(0, self.weapons.pop())
-
+    # методы для изменения характеристик
     def heal(self, hp):
         self.health = min(self.health + hp, self.max_health)
 
@@ -417,31 +409,11 @@ class Hero(AnimatedSprite):
     def add_buff(self, buff):
         self.buffs.append(list(buff))
 
-    def set_pos(self, x, y):
-        self.rect.x, self.rect.y = x, y
+    # методы движения
+    def define_movement(self):  # определение направления движения
+        return 0, 0
 
-    def shoot(self):
-        if self.weapons:
-            weapon = self.get_current_weapon()
-            if self.get_mana() >= weapon.mana_cost:
-                self.mana -= weapon.mana_cost
-                weapon.shoot()
-
-    def move(self):  # отслеживание перемещения
-        keys = pygame.key.get_pressed()
-        x, y = 0, 0
-        if pygame.mouse.get_pos()[0] < width // 2:
-            self.direction = True
-        else:
-            self.direction = False
-        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            x = -1
-        elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            x = 1
-        if keys[pygame.K_w] or keys[pygame.K_UP]:
-            y = -1
-        elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            y = 1
+    def move(self, x, y):  # перемещение модели и проверка столкновения со стенами
         if x or y:
             self.is_running = True
             self.move_x += (x * ((self.get_speed() * 40) ** 2 / (bool(x) + bool(y))) ** 0.5) / FPS
@@ -457,8 +429,8 @@ class Hero(AnimatedSprite):
         else:
             self.is_running = False
 
-    def update(self, *args):  # здесь отрисовка
-        self.move()
+    def update(self, *args):  # просчёт динамических характеристик
+        self.move(*self.define_movement())
         self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
         self.rect.h = self.image.get_rect().h
         self.rect.w = self.image.get_rect().w
@@ -476,8 +448,57 @@ class Hero(AnimatedSprite):
         # pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
 
 
+class Hero(Character):
+    # классы определяются статами
+    types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
+    stat_bar = load_image("hero_bar.png", -1)
+
+    def __init__(self, hero_type, sex, pos_x, pos_y):
+        # анимации ожидания и движения
+        anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png'])),
+                       load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
+        # загрузка картинки через название и пол персонажа
+        super().__init__(pos_x * tile_width, pos_y * tile_height, Hero.types[hero_type], *anim_sheets)
+        self.inventory_size = 2
+
+    def next_weapon(self):
+        if len(self.weapons) > 1:
+            self.weapons.insert(0, self.weapons.pop())
+
+    def shoot(self):
+        if self.weapons:
+            weapon = self.get_current_weapon()
+            if self.get_mana() >= weapon.mana_cost:
+                self.mana -= weapon.mana_cost
+                weapon.shoot()
+
+    def define_movement(self):  # отслеживание перемещения
+        keys = pygame.key.get_pressed()
+        x, y = 0, 0
+        if pygame.mouse.get_pos()[0] < width // 2:
+            self.direction = True
+        else:
+            self.direction = False
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            x = -1
+        elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            x = 1
+        if keys[pygame.K_w] or keys[pygame.K_UP]:
+            y = -1
+        elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
+            y = 1
+        return x, y
+
+
+class Enemy(Character):
+    def __init__(self, x, y, name, stats):
+        anim_sheets = (load_image('characters/' + '_'.join([name, 'idle', 'anim.png'])),
+                       load_image('characters/' + '_'.join([name, 'run', 'anim.png'])))
+        super().__init__(x, y, stats, *anim_sheets)
+        self.add(enemies, obstacles)
+
+
 borders = pygame.sprite.Group()
-decorations = pygame.sprite.Group()
 cursor = pygame.transform.scale(load_image('cursor.jpg', -1), (60, 60))
 obstacles = pygame.sprite.Group()
 
@@ -493,21 +514,21 @@ class Border(pygame.sprite.Sprite):
 
 class TopWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
-        super().__init__(all_sprites, decorations, top_layer, obstacles)
+        super().__init__(all_sprites, top_layer, obstacles)
         self.image = load_image("wall_top.jpg")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y - 20)
 
 
 class BottomWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
-        super().__init__(all_sprites, decorations, bottom_layer, obstacles)
+        super().__init__(all_sprites, bottom_layer, obstacles)
         self.image = load_image("wall_bottom.png")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y + 20)
 
 
 class Floor(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
-        super().__init__(all_sprites, decorations, bottom_layer)
+        super().__init__(all_sprites, bottom_layer)
         self.image = load_image("floor.jpg")
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
@@ -751,6 +772,7 @@ while main_menu:
     hero = Hero(hero_creature, hero_sex, 0, 0)
     generate_level(level, hero)
     player = pygame.sprite.Group(hero)
+    enemies = pygame.sprite.Group()
 
     Potion('red', 150, 150)
     Potion('blue', 175, 150)
@@ -763,6 +785,7 @@ while main_menu:
     Weapon('Револьвер', 150, 250)
     Weapon('MP40', 150, 280)
     Weapon('Гранатомёт', 150, 300)
+    Enemy(150, 320, 'zombie', (1, 1, 1, 7))
 
     while running:
         pick_up = False
@@ -793,6 +816,7 @@ while main_menu:
         bottom_layer.draw(screen)
         items.draw(screen)
         player.draw(screen)
+        enemies.draw(screen)
         top_layer.draw(screen)
         draw_HUD(hero)
         pick = pygame.sprite.spritecollide(hero, items, 0, pygame.sprite.collide_mask)
