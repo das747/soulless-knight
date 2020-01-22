@@ -67,12 +67,14 @@ def load_image(name, color_key=None):  # загрузка изображения
 
 
 def generate_level(level, hero):  # прогрузка уровня
-    all_sprites.remove(*items.sprites(), *top_layer.sprites(), *bottom_layer.sprites())
+    all_sprites.remove(*items.sprites(), *top_layer.sprites(), *bottom_layer.sprites(),
+                       enemies.sprites())
     items.empty()
     borders.empty()
     top_layer.empty()
     bottom_layer.empty()
     obstacles.empty()
+    enemies.empty()
     for y in range(len(level)):
         for x in range(len(level[y])):
             Floor(x, y)
@@ -233,7 +235,6 @@ class Bullet(AnimatedSprite):
         for i, frame in enumerate(self.frames):
             self.frames[i] = pygame.transform.rotate(frame, math.degrees(direction))
         self.image = self.frames[self.cur_frame]
-        self.add(player)
         self.speed_y = -math.sin(direction) * stats['speed']
         self.speed_x = math.cos(direction) * stats['speed']
         self.move_x, self.move_y = 0, 0
@@ -249,13 +250,22 @@ class Bullet(AnimatedSprite):
         self.rect = self.rect.move(int(self.move_x), int(self.move_y))
         self.move_x = self.move_x - int(self.move_x) + self.speed_x / FPS
         self.move_y = self.move_y - int(self.move_y) + self.speed_y / FPS
-        collision = pygame.sprite.spritecollide(self, all_sprites, 0)
-        obst_collision = pygame.sprite.Group(*[sprite for sprite in collision if obstacles.has(sprite)])
-        if obst_collision.sprites():
-            if pygame.sprite.spritecollideany(self, obst_collision, pygame.sprite.collide_mask):
-                Explosion(self.rect.centerx, self.rect.centery, Bullet.types[self.type]['explosion'])
-                self.kill()
-        elif collision[0] == self:
+        coll = pygame.sprite.spritecollide(self, all_sprites, 0)
+        obst_coll = pygame.sprite.Group(*[sprite for sprite in coll if obstacles.has(sprite)])
+        if obst_coll.sprites():
+            mask_coll = pygame.sprite.spritecollide(self, obst_coll, 0, pygame.sprite.collide_mask)
+            if mask_coll:
+                enemy_coll = [sprite for sprite in mask_coll if enemies.has(sprite)]
+                if player.has(self) and not pygame.sprite.collide_mask(self, hero):
+                    Explosion(*self.rect.center, Bullet.types[self.type]['explosion'])
+                    self.kill()
+                    for enemy in enemy_coll:
+                        enemy.hit(self.damage)
+                elif enemies.has(self) and mask_coll != enemy_coll:
+                    Explosion(*self.rect.center, Bullet.types[self.type]['explosion'])
+                    self.kill()
+                    hero.hit(self.damage)
+        elif coll[0] == self:
             self.kill()
 
 
@@ -297,20 +307,26 @@ class Weapon(AnimatedSprite):
         self.rect.centery = rect.centery + rect.h // 2.5
 
     def drop(self, pos):
-        self.remove(player)
+        if player.has(self):
+            self.remove(player)
+        else:
+            self.remove(enemies)
         self.add(items)
         self.picked_hero.weapons.remove(self)
         self.set_pos(*pos)
         self.picked_hero = None
 
-    def picked(self, hero):
-        hero.weapons.insert(0, self)
-        if len(hero.weapons) > hero.inventory_size:
-            hero.weapons[1].drop(hero.get_pos())
+    def picked(self, character):
+        character.weapons.insert(0, self)
+        if len(character.weapons) > character.inventory_size:
+            character.weapons[1].drop(character.get_pos())
 
         items.remove(self)
-        player.add(self)
-        self.picked_hero = hero
+        if player.has(character):
+            self.add(player)
+        else:
+            self.add(enemies)
+        self.picked_hero = character
 
     def highlight(self):
         highlight(self.rect, self.name, self.dmg, self.mana_cost, self.shoot_freq)
@@ -325,7 +341,11 @@ class Weapon(AnimatedSprite):
                 x = self.rect.centerx - self.shoot_radius * math.cos(self.shoot_angle + self.angle)
                 self.angle = math.pi - self.angle
 
-            Bullet(x, y, self.angle, self.dmg + self.picked_hero.get_dmg(), self.bullet_type)
+            shot = Bullet(x, y, self.angle, self.dmg + self.picked_hero.get_dmg(), self.bullet_type)
+            if player.has(self):
+                player.add(shot)
+            else:
+                enemies.add(shot)
             self.shooting = True
             self.cooldown = 1 / self.shoot_freq * self.picked_hero.speed / self.picked_hero.get_speed()
 
@@ -368,9 +388,10 @@ class Character(AnimatedSprite):
         self.health, self.mana, self.dmg, self.speed = stats
         self.max_health, self.max_mana = self.health, self.mana
         super().__init__(4, 1, x, y, *sheets)
+        self.add(obstacles)
         # вычисление маски по максимальной форме
-        mask_surface = pygame.Surface((40, 70), pygame.SRCALPHA, 32)
-        self.frames = [pygame.transform.scale(frame, (32, 56)) for frame in self.frames]
+        mask_surface = pygame.Surface((100, 100), pygame.SRCALPHA, 32)
+        self.frames = [pygame.transform.scale2x(frame) for frame in self.frames]
         for frame in self.frames:
             mask_surface.blit(frame, (0, 0))
             mask_surface.blit(pygame.transform.flip(frame, True, False), (0, 0))
@@ -381,6 +402,7 @@ class Character(AnimatedSprite):
         self.move_x = self.move_y = 0
         self.buffs = []
         self.weapons = []
+        self.stun = 0
 
     # методы для измерения характеристик
     def get_health(self):
@@ -409,6 +431,11 @@ class Character(AnimatedSprite):
     def add_buff(self, buff):
         self.buffs.append(list(buff))
 
+    def hit(self, dmg):
+        if not self.stun:
+            self.health = max(self.health - dmg, 0)
+            self.stun = 0.3
+
     # методы движения
     def define_movement(self):  # определение направления движения
         return 0, 0
@@ -426,25 +453,27 @@ class Character(AnimatedSprite):
             if pygame.sprite.spritecollideany(self, borders, pygame.sprite.collide_mask):
                 self.rect = self.rect.move(0, -self.move_y)
             self.move_y -= int(self.move_y)
-        else:
-            self.is_running = False
 
     def update(self, *args):  # просчёт динамических характеристик
-        self.move(*self.define_movement())
-        self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
-        self.rect.h = self.image.get_rect().h
-        self.rect.w = self.image.get_rect().w
-        for buff in self.buffs:
-            buff[-1] -= 1 / FPS
-        self.buffs = list(filter(lambda b: b[-1] > 0, self.buffs))
+        self.stun = max(0, self.stun - 1 / FPS)
+        if not self.stun:
+            self.move(*self.define_movement())
 
         self.anim_timer += (1 / FPS)
         if self.anim_timer > 1 / self.get_speed():
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
             self.anim_timer = 0
+        self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
+        self.rect.h = self.image.get_rect().h
+        self.rect.w = self.image.get_rect().w
 
+        for buff in self.buffs:
+            buff[-1] -= 1 / FPS
+        self.buffs = list(filter(lambda b: b[-1] > 0, self.buffs))
         if self.weapons:
             self.get_current_weapon().align(self.rect)
+
+        self.is_running = False
         # pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
 
 
@@ -459,6 +488,8 @@ class Hero(Character):
                        load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
         # загрузка картинки через название и пол персонажа
         super().__init__(pos_x * tile_width, pos_y * tile_height, Hero.types[hero_type], *anim_sheets)
+        hit_frame = load_image('_'.join([hero_type, sex, 'hit', 'anim.png']))
+        self.frames.append(pygame.transform.scale2x(hit_frame))
         self.inventory_size = 2
 
     def next_weapon(self):
@@ -489,6 +520,11 @@ class Hero(Character):
             y = 1
         return x, y
 
+    def update(self):
+        super().update()
+        if self.stun:
+            self.image = self.frames[-1]
+
 
 class Enemy(Character):
     fractions = ('zoombie', 'demon', 'orc')
@@ -497,7 +533,17 @@ class Enemy(Character):
         anim_sheets = (load_image('characters/' + '_'.join([name, 'idle', 'anim.png'])),
                        load_image('characters/' + '_'.join([name, 'run', 'anim.png'])))
         super().__init__(x, y, stats, *anim_sheets)
-        self.add(enemies, obstacles)
+        self.add(enemies)
+        self.too_close = False
+        self.norm_distance = 150
+
+    def update(self, *arg):
+        super().update()
+        if pygame.sprite.collide_mask(self, hero):
+            hero.hit(self.dmg)
+            self.too_close = True
+        if self.get_health() == 0:
+            self.kill()
 
 
 class Rusher(Enemy):
@@ -505,12 +551,20 @@ class Rusher(Enemy):
     после столкновения с игроком немного отходят
     бегают быстрее всех персонажей, только атака столкновением"""
     def __init__(self, x, y, fraction):
-        super().__init__(x, y, 'tiny_' + fraction, (4, 0, 1, 8))
+        super().__init__(x, y, 'tiny_' + fraction, (10, 0, 1, 3))
+        self.norm_distance = 50
 
     def define_movement(self):
         hero_x, hero_y = hero.get_pos()
-        x = 1 - (not (hero_x - self.rect.centerx > 20)) - (self.rect.centerx - hero_x > 20)
-        y = 1 - (not (hero_y - self.rect.centery > 20)) - (self.rect.centery - hero_y > 20)
+        if self.too_close:
+            x = -1 + (not (hero_x - self.rect.centerx > 20)) + (self.rect.centerx - hero_x > 20)
+            y = -1 + (not (hero_y - self.rect.centery > 20)) + (self.rect.centery - hero_y > 20)
+            self.too_close = ((abs(self.rect.y - hero_y) ** 2 +
+                               abs(self.rect.x - hero_x) ** 2) ** 0.5 < self.norm_distance)
+        else:
+            x = 1 - (not (hero_x - self.rect.centerx > 20)) - (self.rect.centerx - hero_x > 20)
+            y = 1 - (not (hero_y - self.rect.centery > 20)) - (self.rect.centery - hero_y > 20)
+        self.direction = x == -1
         return x, y
 
 
@@ -518,19 +572,19 @@ class Summoner(Enemy):
     """маги, умеют кастовать Rusher'ов, стараются держаться на расстоянии от игрока, не преследуют
     если игрок подходит слишеом близко могут атаковать или телепортироваться"""
     def __init__(self, x, y, fraction):
-        super().__init__(x, y, 'magic_' + fraction, (8, 0, 4, 6))
+        super().__init__(x, y, 'magic_' + fraction, (20, 0, 4, 6))
 
 
 class Fighter(Enemy):
     """обычные бойцы, стреляют по кд, держатся на расстоянии, но не отходят далеко """
     def __init__(self, x, y, fraction):
-        super().__init__(x, y, 'warrior_' + fraction, (8, 0, 4, 5))
+        super().__init__(x, y, 'warrior_' + fraction, (20, 0, 4, 5))
 
 
 class Elemental(Enemy):
     """те же Fighter'ы но со стихийными пулями(демоны - огонь, зомби - заморозка, орки - яд)"""
     def __init__(self, x, y, fraction):
-        super().__init__(x, y, 'element_' + fraction, (12, 0, 4, 5))
+        super().__init__(x, y, 'element_' + fraction, (25, 0, 4, 5))
 
 
 class Guard(Enemy):
@@ -538,7 +592,7 @@ class Guard(Enemy):
     стреляют масиированно, возможно атака по площади
     в целом медленные, большой кд"""
     def __init__(self, x, y, fraction):
-        super().__init__(x, y, 'big_' + fraction, (25, 0, 6, 3))
+        super().__init__(x, y, 'big_' + fraction, (45, 0, 6, 3))
 
 
 borders = pygame.sprite.Group()
@@ -807,6 +861,7 @@ while main_menu:
     items = pygame.sprite.Group()  # все предметы
     top_layer = pygame.sprite.Group()  # группа для отрисовки всего что над персонажем
     bottom_layer = pygame.sprite.Group()  # группа для отрисoвки всего что под персонажем
+    enemies = pygame.sprite.Group()
 
     level = load_level(f'level_{level_seq[cur_level]}.txt')
     for i in level:
@@ -815,7 +870,6 @@ while main_menu:
     hero = Hero(hero_creature, hero_sex, 0, 0)
     generate_level(level, hero)
     player = pygame.sprite.Group(hero)
-    enemies = pygame.sprite.Group()
 
     Potion('red', 150, 150)
     Potion('blue', 175, 150)
