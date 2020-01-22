@@ -92,7 +92,8 @@ def generate_level(level, hero):  # прогрузка уровня
 def highlight(rect, title, *stats):
     font = pygame.font.Font(None, 25)
     text = font.render('E) ' + title, 1, (255, 255, 255))
-    screen.blit(text, (rect.x + rect.w // 2 - text.get_rect().w // 2, rect.y - 25 - text.get_rect().h))
+    screen.blit(text, (rect.x + rect.w // 2 - text.get_rect().w // 2,
+                       rect.y - 25 - text.get_rect().h))
     pygame.draw.polygon(screen, (255, 255, 255), ((rect.x + rect.w // 2, rect.y),
                                                   (rect.x + rect.w // 2 - 15, rect.y - 15),
                                                   (rect.x + rect.w // 2 + 15, rect.y - 15)))
@@ -101,23 +102,32 @@ def highlight(rect, title, *stats):
         screen.blit(Weapon.stat_bar, (width // 2 - rect.w // 2, height - rect.h))
         for i, stat in enumerate(stats):
             text = font.render(str(stat), 1, (255, 255, 255))
-            screen.blit(text, (width // 2 - rect.w // 2 + rect.w // 3 * (i + 0.5) + text.get_rect().w // 2,
-                               height - rect.h // 2 - text.get_rect().h // 2))
+            screen.blit(text,
+                        (width // 2 - rect.w // 2 + rect.w // 3 * (i + 0.5) + text.get_rect().w // 2,
+                         height - rect.h // 2 - text.get_rect().h // 2))
 
 
 def draw_HUD(hero):
     font = pygame.font.Font(None, 30)
     health = font.render(str(hero.get_health()) + '/' + str(hero.max_health), 1, (255, 255, 255))
     mana = font.render(str(hero.get_mana()) + '/' + str(hero.max_mana), 1, (255, 255, 255))
-    screen.blit(Hero.stat_bar, (0, 0))
+    armor = font.render(str(hero.armor) + '/' + str(hero.max_armor), 1, (255, 255, 255))
+    for i in range(3):
+        pygame.draw.rect(screen, (163, 132, 102),
+                         (48, 13 + 31 * i, 185, 26), 0)
     if hero.get_health():
         pygame.draw.rect(screen, (255, 64, 69),
-                         (54, 18, int(175 / (hero.max_health / hero.get_health())), 18), 0)
+                         (49, 13, int(185 / (hero.max_health / hero.get_health())), 26), 0)
+    if hero.armor:
+        pygame.draw.rect(screen, (150, 150, 150),
+                         (49, 44, int(185 / (hero.max_armor / hero.armor)), 26), 0)
     if hero.get_mana():
         pygame.draw.rect(screen, (72, 114, 164),
-                         (54, 49, int(175 / (hero.max_mana / hero.get_mana())), 18), 0)
+                         (49, 75, int(185 / (hero.max_mana / hero.get_mana())), 26), 0)
+    screen.blit(Hero.stat_bar, (0, 0))
     screen.blit(health, (120, 18))
-    screen.blit(mana, (100, 49))
+    screen.blit(armor, (120, 49))
+    screen.blit(mana, (100, 80))
 
 
 class AnimatedSprite(pygame.sprite.Sprite):  # база для анимированных спрайтов, режет листы анимаций
@@ -148,8 +158,8 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
 
 
 class Explosion(AnimatedSprite):
-    # sheet_format = {'ring': (8, 5), 'flat_effect': (6, 5), 'shockwave': (4, 5), 'explosion': (6, 5),
-    #                 'flame': (6, 5)}
+    # sheet_format = {'ring': (8, 5), 'flat_effect': (6, 5),
+    #                 'shockwave': (4, 5), 'explosion': (6, 5), 'flame': (6, 5)}
     sheet_format = {'1': (8, 1), '2': (8, 1), '3': (10, 1), '4': (12, 1), '5': (22, 1), '6': (8, 1)}
 
     def __init__(self, x, y, shape='1'):
@@ -480,21 +490,29 @@ class Character(AnimatedSprite):
 class Hero(Character):
     # классы определяются статами
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
-    stat_bar = load_image("hero_bar.png", -1)
+    stat_bar = load_image("hero_bar.png")
 
     def __init__(self, hero_type, sex, pos_x, pos_y):
         # анимации ожидания и движения
         anim_sheets = (load_image('_'.join([hero_type, sex, 'idle', 'anim.png'])),
                        load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
         # загрузка картинки через название и пол персонажа
-        super().__init__(pos_x * tile_width, pos_y * tile_height, Hero.types[hero_type], *anim_sheets)
+        stats = Hero.types[hero_type]
+        super().__init__(pos_x * tile_width, pos_y * tile_height, stats, *anim_sheets)
         hit_frame = load_image('_'.join([hero_type, sex, 'hit', 'anim.png']))
         self.frames.append(pygame.transform.scale2x(hit_frame))
         self.inventory_size = 2
+        self.armor = self.max_armor = self.max_health
+        self.armor_cd = 0
 
     def next_weapon(self):
         if len(self.weapons) > 1:
             self.weapons.insert(0, self.weapons.pop())
+
+    def hit(self, dmg):
+        self.armor, dmg = max(0, self.armor - dmg), max(0, dmg - self.armor)
+        self.armor_cd = 4
+        super().hit(dmg)
 
     def shoot(self):
         if self.weapons:
@@ -522,6 +540,11 @@ class Hero(Character):
 
     def update(self):
         super().update()
+        if self.armor != self.max_armor:
+            self.armor_cd -= 1 / FPS
+            if self.armor_cd <= 0:
+                self.armor += 1
+                self.armor_cd = 1
         if self.stun:
             self.image = self.frames[-1]
 
