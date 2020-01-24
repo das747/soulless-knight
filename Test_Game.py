@@ -407,6 +407,7 @@ class Character(AnimatedSprite):
         # инициализируем статы
         self.health, self.mana, self.dmg, self.speed = stats
         self.max_health, self.max_mana = self.health, self.mana
+        self.name = ''
         super().__init__(4, 1, x, y, *sheets)
         self.add(obstacles)
         # вычисление маски по максимальной форме
@@ -498,7 +499,28 @@ class Character(AnimatedSprite):
             self.get_current_weapon().align(self.rect)
 
         self.is_running = False
-        # pygame.draw.rect(screen, (255, 255, 255), self.rect, 2)
+
+        # if self.get_health() == 0:
+        #     Corpse(self.rect.x, self.rect.y, self.name)
+
+
+class Corpse(AnimatedSprite):
+    def __init__(self, x, y, character):
+        super().__init__(5, 1, x, y, load_image(character + '.png'))
+        self.frames = [pygame.transform.scale2x(frame) for frame in self.frames]
+        self.stay_timer = 7
+        self.add(bottom_layer)
+
+    def update(self):
+        self.anim_timer += 1 / FPS
+        self.stay_timer -= 1 / FPS
+        if self.cur_frame < len(self.frames) - 1:
+            if self.anim_timer >= 0.5 / self.frame_lim:
+                self.anim_timer = 0
+                self.cur_frame += 1
+            self.image = self.frames[self.cur_frame]
+        elif self.stay_timer <= 0:
+            self.kill()
 
 
 class Hero(Character):
@@ -512,6 +534,7 @@ class Hero(Character):
                        load_image('_'.join([hero_type, sex, 'run', 'anim.png'])))
         # загрузка картинки через название и пол персонажа
         stats = Hero.types[hero_type]
+        self.name = hero_type + '_' + sex
         super().__init__(pos_x * tile_width, pos_y * tile_height, stats, *anim_sheets)
         hit_frame = load_image('_'.join([hero_type, sex, 'hit', 'anim.png']))
         self.frames.append(pygame.transform.scale2x(hit_frame))
@@ -570,6 +593,7 @@ class Enemy(Character):
         anim_sheets = (load_image('characters/' + '_'.join([name, 'idle', 'anim.png'])),
                        load_image('characters/' + '_'.join([name, 'run', 'anim.png'])))
         super().__init__(x, y, stats, *anim_sheets)
+        self.name = 'character/' + name
         self.add(enemies, borders)
         self.too_close = False
         self.norm_distance = 150
@@ -581,6 +605,8 @@ class Enemy(Character):
             self.too_close = True
         if self.get_health() == 0:
             self.kill()
+
+
 
 
 class Rusher(Enemy):
