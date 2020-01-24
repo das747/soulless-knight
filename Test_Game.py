@@ -53,6 +53,16 @@ def load_level(filename):  # загрузка уровня из текстово
     return list(map(lambda x: x.ljust(max_width, '.'), level_map))
 
 
+def is_wall(x_pos, y_pos):
+    for tile in borders.sprites():
+        rect = pygame.Rect(tile.rect)
+        rect.y -= 10
+        rect.h = tile_height
+        if rect.collidepoint(x_pos, y_pos):
+            return True
+    return False
+
+
 def load_image(name, color_key=None):  # загрузка изображения из папки data
     fullname = os.path.join('data', name)
     image = pygame.image.load(fullname)
@@ -456,12 +466,16 @@ class Character(AnimatedSprite):
             self.move_x += (x * ((self.get_speed() * 40) ** 2 / (bool(x) + bool(y))) ** 0.5) / FPS
             self.move_y += (y * ((self.get_speed() * 40) ** 2 / (bool(x) + bool(y))) ** 0.5) / FPS
             self.rect = self.rect.move(int(self.move_x), 0)
-            if pygame.sprite.spritecollideany(self, borders, pygame.sprite.collide_mask):
-                self.rect = self.rect.move(-int(self.move_x), 0)
+            collide = pygame.sprite.spritecollide(self, borders, 0, pygame.sprite.collide_mask)
+            if collide:
+                if not (len(collide) == 1 and self in collide):
+                    self.rect = self.rect.move(-int(self.move_x), 0)
             self.move_x -= int(self.move_x)
             self.rect = self.rect.move(0, self.move_y)
-            if pygame.sprite.spritecollideany(self, borders, pygame.sprite.collide_mask):
-                self.rect = self.rect.move(0, -self.move_y)
+            collide = pygame.sprite.spritecollide(self, borders, 0, pygame.sprite.collide_mask)
+            if collide:
+                if not (len(collide) == 1 and self in collide):
+                    self.rect = self.rect.move(0, -self.move_y)
             self.move_y -= int(self.move_y)
 
     def update(self, *args):  # просчёт динамических характеристик
@@ -556,7 +570,7 @@ class Enemy(Character):
         anim_sheets = (load_image('characters/' + '_'.join([name, 'idle', 'anim.png'])),
                        load_image('characters/' + '_'.join([name, 'run', 'anim.png'])))
         super().__init__(x, y, stats, *anim_sheets)
-        self.add(enemies)
+        self.add(enemies, borders)
         self.too_close = False
         self.norm_distance = 150
 
@@ -573,9 +587,9 @@ class Rusher(Enemy):
     """самые маленькие противники, просто бегут на игрока,
     после столкновения с игроком немного отходят
     бегают быстрее всех персонажей, только атака столкновением"""
-    def __init__(self, x, y, fraction):
+    def __init__(self, x, y, fraction='zombie'):
         super().__init__(x, y, 'tiny_' + fraction, (10, 0, 1, 3))
-        self.norm_distance = 50
+        self.norm_distance = 100
 
     def define_movement(self):
         hero_x, hero_y = hero.get_pos()
@@ -594,19 +608,55 @@ class Rusher(Enemy):
 class Summoner(Enemy):
     """маги, умеют кастовать Rusher'ов, стараются держаться на расстоянии от игрока, не преследуют
     если игрок подходит слишеом близко могут атаковать или телепортироваться"""
-    def __init__(self, x, y, fraction):
+    def __init__(self, x, y, fraction='zombie'):
         super().__init__(x, y, 'magic_' + fraction, (20, 0, 4, 6))
+        self.fraction = fraction
+        self.norm_distance = 150
+        self.min_distance = 100
+        self.max_distance = 250
+        self.cast_cd = 0
+
+    def define_movement(self):
+        hero_x, hero_y = hero.get_pos()
+        hero_dist = (abs(self.rect.y - hero_y) ** 2 + abs(self.rect.x - hero_x) ** 2) ** 0.5
+        x, y = 0, 0
+        if self.too_close:
+            x = -1 + (not (hero_x - self.rect.centerx > 20)) + (self.rect.centerx - hero_x > 20)
+            y = -1 + (not (hero_y - self.rect.centery > 20)) + (self.rect.centery - hero_y > 20)
+            self.too_close = hero_dist < self.norm_distance
+            self.direction = x == -1
+        else:
+            self.too_close = hero_dist < self.min_distance
+            if hero_dist > self.max_distance:
+                x = 1 - (not (hero_x - self.rect.centerx > 20)) - (self.rect.centerx - hero_x > 20)
+                y = 1 - (not (hero_y - self.rect.centery > 20)) - (self.rect.centery - hero_y > 20)
+                self.direction = x == -1
+            elif not self.cast_cd:
+                if not is_wall(self.rect.left - 20, self.rect.centery):
+                    Rusher(self.rect.left - 20, self.rect.centery, self.fraction)
+                if not is_wall(self.rect.centerx, self.rect.top - 30):
+                    Rusher(self.rect.centerx, self.rect.top - 30, self.fraction)
+                if not is_wall(self.rect.right + 40, self.rect.centery):
+                    Rusher(self.rect.right + 20, self.rect.centery, self.fraction)
+                if not is_wall(self.rect.centerx, self.rect.bottom + 40):
+                    Rusher(self.rect.centerx, self.rect.bottom + 20, self.fraction)
+                self.cast_cd += 15
+        return x, y
+
+    def update(self):
+        super().update()
+        self.cast_cd = max(0, self.cast_cd - 1 / FPS)
 
 
 class Fighter(Enemy):
     """обычные бойцы, стреляют по кд, держатся на расстоянии, но не отходят далеко """
-    def __init__(self, x, y, fraction):
+    def __init__(self, x, y, fraction='zombie'):
         super().__init__(x, y, 'warrior_' + fraction, (20, 0, 4, 5))
 
 
 class Elemental(Enemy):
     """те же Fighter'ы но со стихийными пулями(демоны - огонь, зомби - заморозка, орки - яд)"""
-    def __init__(self, x, y, fraction):
+    def __init__(self, x, y, fraction='zombie'):
         super().__init__(x, y, 'element_' + fraction, (25, 0, 4, 5))
 
 
@@ -614,7 +664,7 @@ class Guard(Enemy):
     """тяжёлые бойцы, мало двигаются, старются идти к игроку,
     стреляют масиированно, возможно атака по площади
     в целом медленные, большой кд"""
-    def __init__(self, x, y, fraction):
+    def __init__(self, x, y, fraction='zombie'):
         super().__init__(x, y, 'big_' + fraction, (45, 0, 6, 3))
 
 
@@ -905,7 +955,7 @@ while main_menu:
     Weapon('Револьвер', 150, 250)
     Weapon('MP40', 150, 280)
     Weapon('Гранатомёт', 150, 300)
-    Rusher(200, 300, 'zombie')
+    Summoner(200, 300, 'zombie')
     # Rusher(250, 300, 'demon')
     # Rusher(160, 300, 'orc')
 
