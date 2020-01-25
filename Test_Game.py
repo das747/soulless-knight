@@ -2,11 +2,13 @@ import os
 import sys
 import math
 import csv
+import random
 
 import pygame
 
 pygame.init()
 pygame.display.set_mode((0, 0))
+pygame.mixer.init()
 
 
 class Camera:
@@ -31,7 +33,7 @@ camera = Camera()
 tile_width = tile_height = 40
 FPS = 60
 clock = pygame.time.Clock()
-level_seq = ('1', '3')  # последоваельность смены уровней
+level_seq = ('1', '2', '3')  # последоваельность смены уровней
 
 # размеры экрана
 FULL_SIZE = FULL_WIDTH, FULL_HEIGHT = pygame.display.get_window_size()
@@ -96,6 +98,32 @@ def generate_level(level, hero):  # прогрузка уровня
                 hero.set_pos(x * tile_width, y * tile_height)
             elif level[y][x] == '*':
                 Portal(x * tile_width, y * tile_height, 2)
+            elif level[y][x] == 'h':
+                Potion('red', (x + 0.5) * tile_width, (y + 0.5) * tile_height)
+            elif level[y][x] == 'H':
+                Potion('red', (x + 0.5) * tile_width, (y + 0.5) * tile_height, size='big')
+            elif level[y][x] == 'm':
+                Potion('blue', (x + 0.5) * tile_width, (y + 0.5) * tile_height)
+            elif level[y][x] == 'M':
+                Potion('blue', (x + 0.5) * tile_width, (y + 0.5) * tile_height, size='big')
+            elif level[y][x] == 'd':
+                Potion('yellow', (x + 0.5) * tile_width, (y + 0.5) * tile_height)
+            elif level[y][x] == 'D':
+                Potion('yellow', (x + 0.5) * tile_width, (y + 0.5) * tile_height, size='big')
+            elif level[y][x] == 's':
+                Potion('green', (x + 0.5) * tile_width, (y + 0.5) * tile_height)
+            elif level[y][x] == 'S':
+                Potion('green', (x + 0.5) * tile_width, (y + 0.5) * tile_height, size='big')
+            elif level[y][x] == 'C':
+                Summoner((x + 0.5) * tile_width, (y + 0.5) * tile_height,
+                         fraction=random.choice(Enemy.fractions))
+            elif level[y][x] == 'R':
+                Weapon('Гранатомёт', (x + 0.5) * tile_width, (y + 0.5) * tile_height)
+            elif level[y][x] == 'P':
+                Weapon('Револьвер', (x + 0.5) * tile_width, (y + 0.5) * tile_height)
+            elif level[y][x] == 'G':
+                Weapon('MP40', (x + 0.5) * tile_width, (y + 0.5) * tile_height)
+
     return len(level[0]), len(level)
 
 
@@ -198,8 +226,12 @@ class Portal(AnimatedSprite):
 
     def picked(self, hero):
         global cur_level
-        cur_level = (cur_level + 1) % len(level_seq)
-        generate_level(load_level(f'level_{level_seq[cur_level]}.txt'), hero)
+        cur_level = cur_level + 1
+        if cur_level == len(level_seq):
+            global running
+            running = False
+        else:
+            generate_level(load_level(f'level_{level_seq[cur_level]}.txt'), hero)
 
     def highlight(self):
         highlight(self.rect, 'Портал')
@@ -245,7 +277,10 @@ class Bullet(AnimatedSprite):
     types = {'bullet': {'a': 0, 'speed': 300, 'image': 'bullet3.png', 'frames': 1, 'explosion': '1'},
              'missile': {'a': 400, 'speed': 200, 'image': 'missle.png', 'frames': 8, 'explosion': '4'}}
 
+    shot = pygame.mixer.Sound('data/sounds/shot.wav')
+
     def __init__(self, x, y, direction, damage, bullet_type='bullet'):
+        Bullet.shot.play()
         self.damage = damage
         self.type = bullet_type
         self.direction = direction
@@ -584,10 +619,13 @@ class Hero(Character):
                 self.armor_cd = 1
         if self.stun:
             self.image = self.frames[-1]
+        if self.get_health() == 0:
+            global running
+            running = False
 
 
 class Enemy(Character):
-    fractions = ('zoombie', 'demon', 'orc')
+    fractions = ('zombie', 'demon', 'orc')
 
     def __init__(self, x, y, name, stats):
         anim_sheets = (load_image('characters/' + '_'.join([name, 'idle', 'anim.png'])),
@@ -605,8 +643,6 @@ class Enemy(Character):
             self.too_close = True
         if self.get_health() == 0:
             self.kill()
-
-
 
 
 class Rusher(Enemy):
@@ -970,20 +1006,20 @@ while main_menu:
     generate_level(level, hero)
     player = pygame.sprite.Group(hero)
 
-    Potion('red', 150, 150)
-    Potion('blue', 175, 150)
-    Potion('green', 200, 150)
-    Potion('yellow', 225, 150)
-    Potion('red', 150, 175, size='big')
-    Potion('blue', 175, 175, size='big')
-    Potion('green', 200, 175, size='big')
-    Potion('yellow', 225, 175, size='big')
-    Weapon('Револьвер', 150, 250)
-    Weapon('MP40', 150, 280)
-    Weapon('Гранатомёт', 150, 300)
-    Summoner(200, 300, 'zombie')
-    # Rusher(250, 300, 'demon')
-    # Rusher(160, 300, 'orc')
+    # Potion('red', 150, 150)
+    # Potion('blue', 175, 150)
+    # Potion('green', 200, 150)
+    # Potion('yellow', 225, 150)
+    # Potion('red', 150, 175, size='big')
+    # Potion('blue', 175, 175, size='big')
+    # Potion('green', 200, 175, size='big')
+    # Potion('yellow', 225, 175, size='big')
+    # Weapon('Револьвер', 150, 250)
+    # Weapon('MP40', 150, 280)
+    # Weapon('Гранатомёт', 150, 300)
+    # Summoner(200, 300, 'zombie')
+    # # Rusher(250, 300, 'demon')
+    # # Rusher(160, 300, 'orc')
 
     while running:
         pick_up = False
