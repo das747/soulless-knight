@@ -8,6 +8,7 @@ import pygame
 
 pygame.init()
 pygame.display.set_mode((0, 0))
+pygame.mixer.init()
 
 
 class Camera:
@@ -276,7 +277,10 @@ class Bullet(AnimatedSprite):
     types = {'bullet': {'a': 0, 'speed': 300, 'image': 'bullet3.png', 'frames': 1, 'explosion': '1'},
              'missile': {'a': 400, 'speed': 200, 'image': 'missle.png', 'frames': 8, 'explosion': '4'}}
 
+    shot = pygame.mixer.Sound('data/sounds/shot.wav')
+
     def __init__(self, x, y, direction, damage, bullet_type='bullet'):
+        Bullet.shot.play()
         self.damage = damage
         self.type = bullet_type
         self.direction = direction
