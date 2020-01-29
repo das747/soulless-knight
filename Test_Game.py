@@ -11,6 +11,7 @@ pygame.display.set_mode((0, 0))
 pygame.mixer.init()
 
 
+# класс камеры, удерживающей персонажа в цетре экрана
 class Camera:
     # зададим начальный сдвиг камеры
     def __init__(self):
@@ -30,15 +31,15 @@ class Camera:
 
 camera = Camera()
 
-tile_width = tile_height = 40
+tile_width = tile_height = 40  # размеры клетки поля
 FPS = 60
 clock = pygame.time.Clock()
 level_seq = ('1', '2', '3')  # последоваельность смены уровней
 
 # размеры экрана
-FULL_SIZE = FULL_WIDTH, FULL_HEIGHT = pygame.display.get_window_size()
-BASE_SIZE = BASE_WISTH, BASE_HEIGHT = 1080, 720
-size = width, height = BASE_SIZE
+FULL_SIZE = FULL_WIDTH, FULL_HEIGHT = pygame.display.get_window_size()  # полноэкранный режим
+BASE_SIZE = BASE_WIDTH, BASE_HEIGHT = 1080, 720  # оконный режим
+size = width, height = BASE_SIZE  # текущие размеры
 screen = pygame.display.set_mode(size, pygame.NOFRAME)
 
 
@@ -55,7 +56,7 @@ def load_level(filename):  # загрузка уровня из текстово
     return list(map(lambda x: x.ljust(max_width, '.'), level_map))
 
 
-def is_wall(x_pos, y_pos):
+def is_wall(x_pos, y_pos):  # проверка препетствия по координатам
     for tile in borders.sprites():
         rect = pygame.Rect(tile.rect)
         rect.y -= 10
@@ -127,7 +128,7 @@ def generate_level(level, hero):  # прогрузка уровня
     return len(level[0]), len(level)
 
 
-def highlight(rect, title, *stats):
+def highlight(rect, title, *stats):  # подсветка интерактивных предметов
     font = pygame.font.Font(None, 25)
     text = font.render('E) ' + title, 1, (255, 255, 255))
     screen.blit(text, (rect.x + rect.w // 2 - text.get_rect().w // 2,
@@ -145,7 +146,7 @@ def highlight(rect, title, *stats):
                          height - rect.h // 2 - text.get_rect().h // 2))
 
 
-def draw_HUD(hero):
+def draw_HUD(hero):  # отрисовка характеритик персонажа
     font = pygame.font.Font(None, 30)
     health = font.render(str(hero.get_health()) + '/' + str(hero.max_health), 1, (255, 255, 255))
     mana = font.render(str(hero.get_mana()) + '/' + str(hero.max_mana), 1, (255, 255, 255))
@@ -195,7 +196,7 @@ class AnimatedSprite(pygame.sprite.Sprite):  # база для анимиров�
                 self.frames.append(sheet.subsurface(pygame.Rect(frame_location, self.rect.size)))
 
 
-class Explosion(AnimatedSprite):
+class Explosion(AnimatedSprite):  # визуальный эффект взрыва
     # sheet_format = {'ring': (8, 5), 'flat_effect': (6, 5),
     #                 'shockwave': (4, 5), 'explosion': (6, 5), 'flame': (6, 5)}
     sheet_format = {'1': (8, 1), '2': (8, 1), '3': (10, 1), '4': (12, 1), '5': (22, 1), '6': (8, 1)}
@@ -218,7 +219,7 @@ class Explosion(AnimatedSprite):
             self.kill()
 
 
-class Portal(AnimatedSprite):
+class Portal(AnimatedSprite):  # портал, перемещает на седующий в последовательности уровень
     def __init__(self, x, y, portal_type=0):
         self.portal_type = portal_type
         super().__init__(3, 4, x, y, load_image('portal.png'))
@@ -239,7 +240,8 @@ class Portal(AnimatedSprite):
     def update(self):
         self.anim_timer += 1 / FPS
         if self.anim_timer >= 0.1:
-            self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.portal_type
+            self.cur_frame = ((self.cur_frame + 1) % self.frame_lim
+                              + self.frame_lim * self.portal_type)
             self.anim_timer = 0
         self.image = self.frames[self.cur_frame]
 
@@ -268,14 +270,12 @@ class Potion(AnimatedSprite):  # любое зелье
         title = 'большое ' * (self.size == 'big') + 'зелье ' + self.name
         highlight(self.rect, title.capitalize())
 
-    # def update(self):  # подсвечивается при подходе
-    #     if not pygame.sprite.collide_mask(self, hero):
-    #         self.image = self.frames[0]
 
-
+# класс снарядов оружия
 class Bullet(AnimatedSprite):
     types = {'bullet': {'a': 0, 'speed': 300, 'image': 'bullet3.png', 'frames': 1, 'explosion': '1'},
-             'missile': {'a': 400, 'speed': 200, 'image': 'missle.png', 'frames': 8, 'explosion': '4'}}
+             'missile': {'a': 400, 'speed': 200, 'image': 'missle.png', 'frames': 8,
+                         'explosion': '4'}}
 
     shot = pygame.mixer.Sound('data/sounds/shot.wav')
 
@@ -300,11 +300,13 @@ class Bullet(AnimatedSprite):
             self.cur_frame = min(self.cur_frame + 1, self.frame_lim - 1)
             self.anim_timer = 0
         self.image = self.frames[self.cur_frame]
+        # изменение скорости и положения
         self.speed_x += Bullet.types[self.type]['a'] * math.cos(self.direction) / FPS
         self.speed_y -= Bullet.types[self.type]['a'] * math.sin(self.direction) / FPS
         self.rect = self.rect.move(int(self.move_x), int(self.move_y))
         self.move_x = self.move_x - int(self.move_x) + self.speed_x / FPS
         self.move_y = self.move_y - int(self.move_y) + self.speed_y / FPS
+        # проверка столкновений
         coll = pygame.sprite.spritecollide(self, all_sprites, 0)
         obst_coll = pygame.sprite.Group(*[sprite for sprite in coll if obstacles.has(sprite)])
         if obst_coll.sprites():
@@ -320,11 +322,13 @@ class Bullet(AnimatedSprite):
                     Explosion(*self.rect.center, Bullet.types[self.type]['explosion'])
                     self.kill()
                     hero.hit(self.damage)
-        elif coll[0] == self:
+        elif coll[0] == self:  # самоуничтожение при вылете за пределы поля
             self.kill()
 
 
+# класс оружия
 class Weapon(AnimatedSprite):
+    # прогрузка характеристик оружия
     types = {}
     with open('data/weapons/weapons_ref.csv') as ref:
         reader = csv.DictReader(ref)
@@ -357,10 +361,12 @@ class Weapon(AnimatedSprite):
         self.picked_hero = None
         self.cooldown = 0
 
+    # выравнивание на персонаже
     def align(self, rect):
         self.rect.centerx = rect.centerx
         self.rect.centery = rect.centery + rect.h // 2.5
 
+    # удаление из инвентаря персонажа
     def drop(self, pos):
         if player.has(self):
             self.remove(player)
@@ -371,6 +377,7 @@ class Weapon(AnimatedSprite):
         self.set_pos(*pos)
         self.picked_hero = None
 
+    # добавление в инвентарь персонажа
     def picked(self, character):
         character.weapons.insert(0, self)
         if len(character.weapons) > character.inventory_size:
@@ -383,9 +390,11 @@ class Weapon(AnimatedSprite):
             self.add(enemies)
         self.picked_hero = character
 
+    # подсветка и показ характеристик
     def highlight(self):
         highlight(self.rect, self.name, self.dmg, self.mana_cost, self.shoot_freq)
 
+    # выстрел
     def shoot(self):
         if self.cooldown <= 0:
             y = self.rect.centery - self.shoot_radius * math.sin(self.shoot_angle + self.angle)
@@ -402,9 +411,11 @@ class Weapon(AnimatedSprite):
             else:
                 enemies.add(shot)
             self.shooting = True
-            self.cooldown = 1 / self.shoot_freq * self.picked_hero.speed / self.picked_hero.get_speed()
+            self.cooldown = (1 / self.shoot_freq * self.picked_hero.speed /
+                            self.picked_hero.get_speed())
 
     def update(self):
+        # анимация выстрела
         if self.shooting:
             self.anim_timer += 1 / FPS
             if self.anim_timer >= self.anim_length / self.frame_lim:
@@ -415,6 +426,7 @@ class Weapon(AnimatedSprite):
             self.cur_frame = 0
         self.cooldown -= 1 / FPS
         self.image = self.frames[self.cur_frame]
+        # поворот за курсором
         if self.picked_hero:
             if self is self.picked_hero.get_current_weapon():
                 new_image = pygame.Surface((int(self.image.get_rect().w * self.align_k),
@@ -437,6 +449,7 @@ class Weapon(AnimatedSprite):
                 self.image = pygame.Surface((0, 0), pygame.SRCALPHA, 32)
 
 
+# класс перемещающегося персонажа
 class Character(AnimatedSprite):
     def __init__(self, x, y, stats, *sheets):
         # инициализируем статы
@@ -460,7 +473,7 @@ class Character(AnimatedSprite):
         self.weapons = []
         self.stun = 0
 
-    # методы для измерения характеристик
+    # методы для получения характеристик
     def get_health(self):
         return self.health
 
@@ -515,10 +528,11 @@ class Character(AnimatedSprite):
             self.move_y -= int(self.move_y)
 
     def update(self, *args):  # просчёт динамических характеристик
+        # движение
         self.stun = max(0, self.stun - 1 / FPS)
         if not self.stun:
             self.move(*self.define_movement())
-
+        # анимация
         self.anim_timer += (1 / FPS)
         if self.anim_timer > 1 / self.get_speed():
             self.cur_frame = (self.cur_frame + 1) % self.frame_lim + self.frame_lim * self.is_running
@@ -526,10 +540,11 @@ class Character(AnimatedSprite):
         self.image = pygame.transform.flip(self.frames[self.cur_frame], self.direction, 0)
         self.rect.h = self.image.get_rect().h
         self.rect.w = self.image.get_rect().w
-
+        # просчёт баффов
         for buff in self.buffs:
             buff[-1] -= 1 / FPS
         self.buffs = list(filter(lambda b: b[-1] > 0, self.buffs))
+        # выравнивание оружия
         if self.weapons:
             self.get_current_weapon().align(self.rect)
 
@@ -539,6 +554,7 @@ class Character(AnimatedSprite):
         #     Corpse(self.rect.x, self.rect.y, self.name)
 
 
+# класс для анимации смерти персонажей, работает но анимации не отрисованы
 class Corpse(AnimatedSprite):
     def __init__(self, x, y, character):
         super().__init__(5, 1, x, y, load_image(character + '.png'))
@@ -558,6 +574,7 @@ class Corpse(AnimatedSprite):
             self.kill()
 
 
+# класс  героя, управляемого игроком
 class Hero(Character):
     # классы определяются статами
     types = {'knight': (6, 150, 5, 5), 'wizzard': (4, 250, 3, 6), 'lizard': (4, 150, 7, 7)}
@@ -577,15 +594,18 @@ class Hero(Character):
         self.armor = self.max_armor = self.max_health
         self.armor_cd = 0
 
+    # смена оружия
     def next_weapon(self):
         if len(self.weapons) > 1:
             self.weapons.insert(0, self.weapons.pop())
 
+    # получение урона
     def hit(self, dmg):
         self.armor, dmg = max(0, self.armor - dmg), max(0, dmg - self.armor)
         self.armor_cd = 4
         super().hit(dmg)
 
+    # вытсрел текущим оружием
     def shoot(self):
         if self.weapons:
             weapon = self.get_current_weapon()
@@ -612,11 +632,13 @@ class Hero(Character):
 
     def update(self):
         super().update()
+        # восстановление брони
         if self.armor != self.max_armor:
             self.armor_cd -= 1 / FPS
             if self.armor_cd <= 0:
                 self.armor += 1
                 self.armor_cd = 1
+        # анимация урона
         if self.stun:
             self.image = self.frames[-1]
         if self.get_health() == 0:
@@ -624,6 +646,7 @@ class Hero(Character):
             running = False
 
 
+# базовый класс противников
 class Enemy(Character):
     fractions = ('zombie', 'demon', 'orc')
 
@@ -710,24 +733,24 @@ class Summoner(Enemy):
         self.cast_cd = max(0, self.cast_cd - 1 / FPS)
 
 
-class Fighter(Enemy):
-    """обычные бойцы, стреляют по кд, держатся на расстоянии, но не отходят далеко """
-    def __init__(self, x, y, fraction='zombie'):
-        super().__init__(x, y, 'warrior_' + fraction, (20, 0, 4, 5))
-
-
-class Elemental(Enemy):
-    """те же Fighter'ы но со стихийными пулями(демоны - огонь, зомби - заморозка, орки - яд)"""
-    def __init__(self, x, y, fraction='zombie'):
-        super().__init__(x, y, 'element_' + fraction, (25, 0, 4, 5))
-
-
-class Guard(Enemy):
-    """тяжёлые бойцы, мало двигаются, старются идти к игроку,
-    стреляют масиированно, возможно атака по площади
-    в целом медленные, большой кд"""
-    def __init__(self, x, y, fraction='zombie'):
-        super().__init__(x, y, 'big_' + fraction, (45, 0, 6, 3))
+# class Fighter(Enemy):
+#     """обычные бойцы, стреляют по кд, держатся на расстоянии, но не отходят далеко """
+#     def __init__(self, x, y, fraction='zombie'):
+#         super().__init__(x, y, 'warrior_' + fraction, (20, 0, 4, 5))
+#
+#
+# class Elemental(Enemy):
+#     """те же Fighter'ы но со стихийными пулями(демоны - огонь, зомби - заморозка, орки - яд)"""
+#     def __init__(self, x, y, fraction='zombie'):
+#         super().__init__(x, y, 'element_' + fraction, (25, 0, 4, 5))
+#
+#
+# class Guard(Enemy):
+#     """тяжёлые бойцы, мало двигаются, старются идти к игроку,
+#     стреляют масиированно, возможно атака по площади
+#     в целом медленные, большой кд"""
+#     def __init__(self, x, y, fraction='zombie'):
+#         super().__init__(x, y, 'big_' + fraction, (45, 0, 6, 3))
 
 
 borders = pygame.sprite.Group()
@@ -735,6 +758,7 @@ cursor = pygame.transform.scale(load_image('cursor.jpg', -1), (60, 60))
 obstacles = pygame.sprite.Group()
 
 
+# физическое препятствие
 class Border(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, borders, bottom_layer, obstacles)
@@ -744,6 +768,7 @@ class Border(pygame.sprite.Sprite):
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
 
+# верхняя часть стены
 class TopWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, top_layer, obstacles)
@@ -751,6 +776,7 @@ class TopWall(pygame.sprite.Sprite):
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y - 20)
 
 
+# нижняя часть стены
 class BottomWall(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, bottom_layer, obstacles)
@@ -758,6 +784,7 @@ class BottomWall(pygame.sprite.Sprite):
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y + 20)
 
 
+# пол
 class Floor(pygame.sprite.Sprite):
     def __init__(self, pos_x, pos_y):
         super().__init__(all_sprites, bottom_layer)
@@ -765,11 +792,14 @@ class Floor(pygame.sprite.Sprite):
         self.rect = self.image.get_rect().move(tile_width * pos_x, tile_height * pos_y)
 
 
+# завершение процесса
 def terminate():
+    pygame.mixer.quit()
     pygame.quit()
     sys.exit()
 
 
+# иконка персонажа в менб выбора персонажа
 class ShowHero(AnimatedSprite):
     def __init__(self, x, y, hero_type, sex):
         anim_sheets = load_image('_'.join([hero_type, sex, 'idle', 'anim.png']))
@@ -793,6 +823,7 @@ MAN_IMAGE = load_image('man_button.png', -1)
 PREV_IMAGE = load_image('prev_button.png', -1)
 
 
+# меню выбора персонажа
 def hero_choose():
     heroes = list(Hero.types.keys())
     types = Hero.types
@@ -881,7 +912,8 @@ EXIT_IMAGE = load_image('exit_button.png', -1)
 PAUSE_IMAGE = load_image('pause_menu.png', -1)
 
 
-def pause():  # функция главного меню и паузы
+# меню паузы
+def pause():
     while True:
         screen.fill((0, 0, 0))
         bottom_layer.draw(screen)
@@ -915,6 +947,7 @@ def pause():  # функция главного меню и паузы
 FULL_IMAGE = load_image('full_disp.png', -1)
 
 
+# главное меню
 def menu():  # функция главного меню и паузы
     while True:
         screen.blit(background, (0, 0))
@@ -1006,21 +1039,6 @@ while main_menu:
     generate_level(level, hero)
     player = pygame.sprite.Group(hero)
 
-    # Potion('red', 150, 150)
-    # Potion('blue', 175, 150)
-    # Potion('green', 200, 150)
-    # Potion('yellow', 225, 150)
-    # Potion('red', 150, 175, size='big')
-    # Potion('blue', 175, 175, size='big')
-    # Potion('green', 200, 175, size='big')
-    # Potion('yellow', 225, 175, size='big')
-    # Weapon('Револьвер', 150, 250)
-    # Weapon('MP40', 150, 280)
-    # Weapon('Гранатомёт', 150, 300)
-    # Summoner(200, 300, 'zombie')
-    # # Rusher(250, 300, 'demon')
-    # # Rusher(160, 300, 'orc')
-
     while running:
         pick_up = False
         for event in pygame.event.get():
@@ -1032,16 +1050,15 @@ while main_menu:
                     if pause() == 'Exit':
                         running = False
                 elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_e:
+                    if event.key == pygame.K_e:  # взаимодейтсиве с интерактивными предметами
                         pick_up = True
-                    elif event.key == pygame.K_r:
+                    elif event.key == pygame.K_r:  # смена оружия
                         hero.next_weapon()
-
+            # выстрелы героя
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == pygame.BUTTON_LEFT:
                     hero.shoot()
-                # Explosion(*event.pos, random.choice(list(Explosion.sheet_format.keys())))
-                # Bullet(*event.pos, hero.weapons[hero.cur_weapon].angle)
+
         camera.update(hero)
         # обновляем положение всех спрайтов
         for sprite in all_sprites:
